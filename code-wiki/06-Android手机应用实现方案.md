@@ -1,6 +1,6 @@
 # Android 手机应用实现方案
 
-> 版本：v0.1（草案，待评审）
+> 版本：v0.2（细化版：系统/工具/技能/插件/MCP 详案）
 > 日期：2026-08-13
 > 分支：`android`
 
@@ -126,7 +126,106 @@
 
 ---
 
-## 7. 实施步骤（分阶段任务）
+## 7. 详细方案：系统 / 工具 / 技能 / 插件 / MCP
+
+> 本小节基于 dsh 仓库**实际存在的机制**编写（默认组合 `packages/bundle/base/cordis.patch.yml`、`web-app/cordis.patch.yml`、`packages/mcp/mcp-client`、`packages/skill/*`、`examples/mcp-memory/*`），不做臆造。
+
+### 7.1 安装什么系统（手机侧运行环境）
+
+| 层次 | 选型 | 说明 |
+|---|---|---|
+| 手机宿主 OS | Android 8.0+（API 26+） | 覆盖主流机型；自用无需商店合规 |
+| Linux 运行时 | **Termux**（推荐，第一版） | 轻量、apt 可用、有 Node.js 官方包；App 通过其 API 自动管理 |
+| 备选 | **proot-distro / Ubuntu** | 需要更完整发行版时（后续阶段）切换；dsh 无系统绑定 |
+| Node.js | `nodejs-lts`（≥ 22.19） | dsh 硬性要求（仓库 AGENTS.md）；Termux 提供 LTS |
+| 包管理器 | pnpm（Node 自带 corepack） | 用于安装 dsh 及其 workspace 依赖 |
+
+**安装决策：**
+- 第一版用 Termux，因为 App 可以**自动引导安装**（下载 Termux + 运行 `pkg install`），体验接近 Operit 的一体化安装。
+- dsh 本体是纯 JS/ESM，无强制原生模块，Termux 上 Node 兼容性风险集中在个别依赖；阶段 0 已验证此风险点。
+
+### 7.2 安装什么工具（Linux 执行层常用工具）
+
+> 这些工具由 dsh 的 shell 能力（`tool-bash` → `dsh-bash-sandbox` → `dsh-subprocess-local`）在 Termux 环境内执行。默认组合已启用 `tool-bash`、`tool-fs`、`tool-web` 等（见 base/cordis.patch.yml）。
+
+| 工具 | 用途 | 安装来源 |
+|---|---|---|
+| `git` | 版本管理、拉取插件/技能 | `pkg install git` |
+| `python` | 跑 Python 脚本（dsh 有 python/ SDK） | `pkg install python` |
+| `node` / `npm` / `corepack` | 运行 dsh 本体 + MCP 服务器（stdio） | `pkg install nodejs-lts` |
+| `curl` / `wget` | 网络、下载 | `pkg install curl` |
+| `openssh` | （可选）远程排障 | `pkg install openssh` |
+| `ripgrep`(`rg`) / `fd` | 快速搜索（dsh 的 fs-search 工具可调用） | `pkg install ripgrep` |
+| `bash` / `coreutils` / `file` | shell 基础 | Termux 自带 |
+
+**注意：** 不要在第一版安装 `proot`/`chroot` 根发行版——不必要；除非后续要完整 Ubuntu 或跑 GUI 应用。
+
+### 7.3 技能（skill）方案
+
+dsh 技能机制（见 `packages/skill/skill`、`skill-filesystem`、`tool-skill`）：
+- 技能 = `SKILL.md`（或扁平 Markdown）文件，放在规定的 skill 根目录，由 `dsh-skill-filesystem` 扫描，`dsh-tool-skill` 向模型暴露目录 + `skill` 加载工具。
+- **发现优先级（rank）**（官方文档确认）：
+
+| Rank | 来源 | 路径 |
+|---|---|---|
+| 100 | 项目 | `<projectRoot>/.dsh/skills` |
+| 200 | 项目 | `<projectRoot>/.agents/skills` |
+| 300 | 自定义 | `Config.customSkillDirs` |
+| 400 | 用户 | `<dshHome>/skills` |
+| 500 | 用户 | `<agentsHome>/skills` |
+| 600 | 内置 | `Config.bundledSkillDir` |
+
+**第一版技能策略：**
+- 在 App 内设一个"技能库"入口（映射到 `<dshHome>/skills` 或 `customSkillDirs`），用户把 `SKILL.md` 放进去即生效。
+- 复用仓库自带示例技能（如 `examples/` 或社区技能）；`dsh-skill-badge` 默认禁用，不启用。
+- Web UI 已有 `ui-skill` 界面，App 里开箱可用，无需自建技能管理 UI。
+
+### 7.4 插件（plugin）方案
+
+dsh 一切皆插件（Cordis 组合）。默认组合（`dsh-base` + `dsh-web-app`）已内置大量能力，**第一版无需自研插件**，只需"挑开/关"：
+
+**第一版默认开启（base 组合已含）：** llm/session/typert、settings、credentials、subprocess、sandbox(+policy)、bash(+sandbox)、tool-bash、tool-fs、tool-fs-search、tool-web、tool-todo、tool-skill、goal、plan-mode、compaction、subagent、workflow、tool-jobs、timeout-policy、web(search) 等。
+
+**第一版要改的开关：**
+| 行 id | 默认 | 第一版动作 | 理由 |
+|---|---|---|---|
+| `skill-badge` | disabled | 保持 disabled | 不需要徽章技能 |
+| `web` / `tool-web` | enabled（fetch:false） | 保持，可开 fetch | 搜索可用；fetch 默认关（SSRF 防护），按需开 |
+| `hmr`（web） | disabled | 保持 disabled | 生产运行无需热重载 |
+| `session-query-sqlite` | `:memory:` + openAt:never | **改为持久化**（`path` 指向手机本地文件 + `openAt: first-search`） | 让"会话全文搜索"可用，落盘手机 |
+
+**安装第三方插件的官方入口：**
+- `dsh plugin --profile <name> add <package-or-git-spec>`（CLI reference 确认）
+- 插件通过自己的 `cordis.patch.yml` 贡献层；App 设置页可直接调用该命令或写配置文件。
+
+### 7.5 MCP（Model Context Protocol）方案
+
+dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `packages/mcp/mcp-client/README`）。
+- 传输：`stdio`（本机启动子进程，如 `npx -y @modelcontextprotocol/server-xxx`）或 `streamable-http`（连接远程 URL）。
+- 模型看到的工具名：`mcp__<serverName>__<rawName>`。
+- 配置方式：在 profile 的 `cordis.patch.yml`（或 overlay）加一行插件实例；App 设置页可提供"添加 MCP 服务器"表单，写入该配置。
+
+**第一版建议预置的 MCP（全部自选、默认关，用户按需开）：**
+
+| 服务器 | 类型 | 说明 | 参考配置 |
+|---|---|---|---|
+| MCP Reference Memory（官方 `@modelcontextprotocol/server-memory`） | stdio | 本地知识图谱记忆（实体/关系/观察） | `examples/mcp-memory/mcp-reference-memory.cordis.yml` |
+| Memorix | stdio | 本地启发式记忆（无 LLM 依赖） | `examples/mcp-memory/memorix.cordis.yml` |
+| filesystem（官方） | stdio | 文件系统工具（补充 dsh 自带 fs） | 通用模板 |
+| fetch（官方） | stdio | 网页抓取（若 dsh 内置 fetch 保持关闭） | 通用模板 |
+
+> ⚠️ 重要事实（已核实）：仓库 `packages/mcp/mcp-client/README` 明确 —— **"Tools 是唯一被桥接的 MCP 能力；Resources 和 Prompts 尚无 harness 消费接口，暂缓"**。所以第一版只承诺"MCP 工具可用"，不承诺 MCP 的 resource/prompt 能力。
+>
+> ⚠️ 记忆相关的 MCP 示例是"默认关闭的第三方参考配置"，收录不代表官方背书；是否启用由用户决定。这些配置只在第一版提供"入口"，**真正的跨会话记忆功能仍列入后续阶段**（见 6.2）。
+
+**App 设置页需要提供的 MCP 管理能力：**
+- 列出已配置的 MCP 服务器（`serverName` / transport / 状态）
+- 添加/删除：填 serverName + transport +（stdio: command/args/env/cwd）或（http: url/headers）
+- 展示模型可见工具名 `mcp__<serverName>__<tool>`，方便用户理解
+
+---
+
+## 8. 实施步骤（分阶段任务）
 
 > 以下为"若推进到实现"时的路线图；当前交付物为本方案文档。
 
@@ -151,7 +250,7 @@
 
 ---
 
-## 8. 验证方式（如何证明"能在手机上用"）
+## 9. 验证方式（如何证明"能在手机上用"）
 
 1. **可行性验证（阶段 0）**：Termux 中能成功启动 dsh 并完成一次对话 → 证明"手机本地跑 dsh"成立。
 2. **功能验收（阶段 2）**：App 内完成一个端到端任务——例如"在手机内新建一个文件夹，写一个脚本并运行，输出结果到对话里"。
@@ -160,7 +259,7 @@
 
 ---
 
-## 9. 风险与对策
+## 10. 风险与对策
 
 | 风险 | 等级 | 对策 |
 |---|---|---|
@@ -172,7 +271,7 @@
 
 ---
 
-## 10. 与参考对象的边界（不做什么）
+## 11. 与参考对象的边界（不做什么）
 
 - **不做**无障碍点击操控其它 App（安全原因，用户已确认"不要"）。
 - **不做**手机本地大模型推理（第一版；用户选云端 API，且普通手机跑不动大模型）。
@@ -181,7 +280,7 @@
 
 ---
 
-## 11. 待办 / 开放问题
+## 12. 待办 / 开放问题
 
 - [ ] 用户确认本方案文档后，再决定是否进入"阶段 0 可行性验证"或直接开始搭建 App 工程。
 - [ ] 确定 App 名称与包名（自用即可，如 `com.self.dshmobile`）。
