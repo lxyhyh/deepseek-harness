@@ -67,21 +67,14 @@
           <div class="topappbar">
             <div class="ta-left">
               <div class="ta-title">dsh Mobile</div>
-              <div class="ta-sub"><span class="dot ok"></span>容器运行中</div>
             </div>
-            <button class="icon-btn" data-open-drawer aria-label="菜单"><svg class="ic" data-icon="menu"></svg></button>
+            <div class="ta-right">
+              <span class="dot ok" title="容器运行中"></span>
+              <button class="icon-btn" data-open-drawer aria-label="菜单"><svg class="ic" data-icon="menu"></svg></button>
+            </div>
           </div>
           <!-- 网页主体：dsh Web UI 嵌入区（功能随 dsh 自带） -->
           <div class="web-frame">
-            <div class="wf-top">
-              <button class="wf-model" data-model-select aria-haspopup="menu">
-                <span class="wf-model-name">deepseek-chat</span>
-                <span class="wf-effort">低</span>
-                <svg class="ic sm" data-icon="chevron-down"></svg>
-              </button>
-              <span class="wf-session">新会话</span>
-              <span class="wf-tag">dsh 网页界面 · 嵌入区</span>
-            </div>
             <!-- 模型 / 思考强度菜单（dsh ModelSelect 示意） -->
             <div class="model-menu" id="modelMenu" hidden>
               <div class="mm-title">模型</div>
@@ -122,6 +115,11 @@ EOF</pre>
               </div>
             </div>
             <div class="wf-composer">
+              <button class="wf-model" data-model-select aria-haspopup="menu" title="选择模型与思考强度">
+                <span class="wf-model-name">deepseek-chat</span>
+                <span class="wf-effort">低</span>
+                <svg class="ic sm" data-icon="chevron-down"></svg>
+              </button>
               <button class="icon-btn" data-file-send aria-label="发送文件" title="发送文件（系统选择器）"><svg class="ic" data-icon="paperclip"></svg></button>
               <div class="field-inline">输入消息…</div>
               <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
@@ -227,10 +225,30 @@ EOF</pre>
             </div>
             <div class="group-label">工具下载源</div>
             <div class="card list" id="mirrorList">
-              <label class="radio-row"><input type="radio" name="mirror" value="tsinghua" checked /><span class="rr-name">清华 TUNA 镜像</span><span class="rr-status ok">正常</span></label>
-              <label class="radio-row"><input type="radio" name="mirror" value="aliyun" /><span class="rr-name">阿里云镜像</span><span class="rr-status ok">正常</span></label>
-              <label class="radio-row"><input type="radio" name="mirror" value="ustc" /><span class="rr-name">中科大镜像</span><span class="rr-status">较慢</span></label>
-              <label class="radio-row"><input type="radio" name="mirror" value="official" /><span class="rr-name">官方源</span><span class="rr-status warn">可能很慢</span></label>
+              <div class="radio-row">
+                <label class="rr-main"><input type="radio" name="mirror" value="tsinghua" checked /><span class="rr-name">清华 TUNA 镜像</span></label>
+                <span class="rr-status ok">正常</span>
+                <button class="speed-btn" data-speed="tsinghua">测速</button>
+                <span class="speed-result" data-speed-result="tsinghua"></span>
+              </div>
+              <div class="radio-row">
+                <label class="rr-main"><input type="radio" name="mirror" value="aliyun" /><span class="rr-name">阿里云镜像</span></label>
+                <span class="rr-status ok">正常</span>
+                <button class="speed-btn" data-speed="aliyun">测速</button>
+                <span class="speed-result" data-speed-result="aliyun"></span>
+              </div>
+              <div class="radio-row">
+                <label class="rr-main"><input type="radio" name="mirror" value="ustc" /><span class="rr-name">中科大镜像</span></label>
+                <span class="rr-status">较慢</span>
+                <button class="speed-btn" data-speed="ustc">测速</button>
+                <span class="speed-result" data-speed-result="ustc"></span>
+              </div>
+              <div class="radio-row">
+                <label class="rr-main"><input type="radio" name="mirror" value="official" /><span class="rr-name">官方源</span></label>
+                <span class="rr-status warn">可能很慢</span>
+                <button class="speed-btn" data-speed="official">测速</button>
+                <span class="speed-result" data-speed-result="official"></span>
+              </div>
             </div>
             <div class="hint"><svg class="ic sm" data-icon="info"></svg>国内环境建议选镜像站；连不上会自动提示你切换。</div>
             <div class="group-label">维护</div>
@@ -384,16 +402,18 @@ EOF</pre>
               <div class="progress-track hidden" id="backupProgress"><div class="progress-fill" id="backupFill" style="width:0%"></div></div>
             </div>
             <div class="group-label">历史备份</div>
-            <div class="card list">
+            <div class="card list" id="backupHistory">
               <div class="row">
                 <span class="row-ic"><svg class="ic sm" data-icon="file-archive"></svg></span>
                 <div class="row-main"><div class="row-label">dsh-backup-2026-08-13.tar.gz</div><div class="row-sub">3.2 GB · 今天 9:00</div></div>
                 <button class="btn tonal sm" data-restore>恢复</button>
+                <button class="icon-btn sm" data-del-backup aria-label="删除备份"><svg class="ic sm" data-icon="trash"></svg></button>
               </div>
               <div class="row">
                 <span class="row-ic"><svg class="ic sm" data-icon="file-archive"></svg></span>
                 <div class="row-main"><div class="row-label">dsh-backup-2026-08-06.tar.gz</div><div class="row-sub">3.1 GB · 8月6日</div></div>
                 <button class="btn tonal sm" data-restore>恢复</button>
+                <button class="icon-btn sm" data-del-backup aria-label="删除备份"><svg class="ic sm" data-icon="trash"></svg></button>
               </div>
             </div>
             <div class="hint"><svg class="ic sm" data-icon="info"></svg>恢复会覆盖当前环境，请先确认备份文件来自同一设备体系。</div>

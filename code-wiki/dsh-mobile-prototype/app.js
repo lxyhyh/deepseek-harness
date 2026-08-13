@@ -179,6 +179,34 @@
     });
   });
 
+  /* ---------- 下载源：测速 ---------- */
+  var SPEED_RESULTS = {
+    tsinghua: { ms: 25,  status: "正常",     cls: "ok" },
+    aliyun:   { ms: 48,  status: "正常",     cls: "ok" },
+    ustc:     { ms: 128, status: "较慢",     cls: "" },
+    official: { ms: 420, status: "可能很慢", cls: "warn" },
+  };
+  document.querySelectorAll("[data-speed]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var key = btn.dataset.speed;
+      var row = btn.closest(".radio-row");
+      var status = row.querySelector(".rr-status");
+      var result = row.querySelector(".speed-result");
+      btn.disabled = true;
+      btn.textContent = "测速中…";
+      result.textContent = "";
+      setTimeout(function () {
+        var r = SPEED_RESULTS[key];
+        btn.disabled = false;
+        btn.textContent = "测速";
+        result.textContent = r.ms + " ms";
+        status.textContent = r.status;
+        status.className = "rr-status" + (r.cls ? " " + r.cls : "");
+        showSnack(MIRROR_NAMES[key] + " 延迟约 " + r.ms + " ms");
+      }, 900);
+    });
+  });
+
   /* ---------- 备份：打包内容勾选 ---------- */
   var backupSummary = document.getElementById("backupSummary");
   var ITEM_META = {
@@ -380,6 +408,35 @@
   document.querySelectorAll("[data-restore]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       showSnack("恢复会覆盖当前环境，请先确认（原型演示）");
+    });
+  });
+
+  /* ---------- 备份：删除（带确认弹窗） ---------- */
+  function showConfirm(title, desc, onOk) {
+    var modal = document.createElement("div");
+    modal.className = "modal-scrim";
+    modal.innerHTML =
+      '<div class="modal">' +
+      '<div class="modal-title">' + title + '</div>' +
+      '<div class="modal-desc">' + desc + '</div>' +
+      '<div class="modal-actions">' +
+      '<button class="btn tonal" data-confirm-cancel>取消</button>' +
+      '<button class="btn filled" style="background:var(--md-error);color:#fff;" data-confirm-ok>删除</button>' +
+      '</div></div>';
+    phone.appendChild(modal);
+    injectIcons(modal);
+    modal.querySelector("[data-confirm-cancel]").addEventListener("click", function () { modal.remove(); });
+    modal.querySelector("[data-confirm-ok]").addEventListener("click", function () { modal.remove(); onOk(); });
+  }
+  document.querySelectorAll("[data-del-backup]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var row = btn.closest(".row");
+      var name = row.querySelector(".row-label").textContent;
+      var size = row.querySelector(".row-sub").textContent.split("·")[0].trim();
+      showConfirm("删除此备份？", "将移除 " + name + "（" + size + "），不可恢复。", function () {
+        row.remove();
+        showSnack("已删除备份：" + name);
+      });
     });
   });
 
