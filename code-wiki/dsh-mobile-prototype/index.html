@@ -125,7 +125,6 @@ EOF</pre>
                   <svg class="ic sm" data-icon="chevron-down"></svg>
                 </button>
                 <button class="icon-btn" data-file-send aria-label="发送文件" title="发送文件（系统选择器）"><svg class="ic" data-icon="paperclip"></svg></button>
-                <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
                 <span class="spacer"></span>
                 <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
               </div>
@@ -423,8 +422,7 @@ EOF</pre>
               <div class="backup-items" id="backupItems">
                 <label class="check-row"><input type="checkbox" data-item="config" checked /><span class="ck-name">配置与凭据</span><span class="ck-size">约 4 MB</span></label>
                 <label class="check-row"><input type="checkbox" data-item="sessions" checked /><span class="ck-name">会话记录</span><span class="ck-size">约 12 MB</span></label>
-                <label class="check-row"><input type="checkbox" data-item="container" /><span class="ck-name">容器环境（Ubuntu rootfs）</span><span class="ck-size">约 2.1 GB</span></label>
-                <label class="check-row"><input type="checkbox" data-item="tools" /><span class="ck-name">已装工具（SDK/NDK 等）</span><span class="ck-size">约 1.9 GB</span></label>
+                <label class="check-row"><input type="checkbox" data-item="container" /><span class="ck-name">容器环境（Ubuntu rootfs + 已装工具）</span><span class="ck-size">约 2.1 GB</span></label>
               </div>
               <div class="hint" id="backupSummary" style="margin-top:10px;"><svg class="ic sm" data-icon="info"></svg>当前将打包：<b>配置 + 会话</b>（约 16 MB）</div>
               <button class="btn filled block" id="doBackup" style="margin-top:12px;">立即备份</button>
