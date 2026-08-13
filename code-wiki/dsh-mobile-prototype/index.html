@@ -115,15 +115,20 @@ EOF</pre>
               </div>
             </div>
             <div class="wf-composer">
-              <button class="wf-model" data-model-select aria-haspopup="menu" title="选择模型与思考强度">
-                <span class="wf-model-name">deepseek-chat</span>
-                <span class="wf-effort">低</span>
-                <svg class="ic sm" data-icon="chevron-down"></svg>
-              </button>
-              <button class="icon-btn" data-file-send aria-label="发送文件" title="发送文件（系统选择器）"><svg class="ic" data-icon="paperclip"></svg></button>
-              <div class="field-inline">输入消息…</div>
-              <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
-              <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
+              <div class="wf-input-row">
+                <div class="field-inline">输入消息…</div>
+              </div>
+              <div class="wf-toolbar">
+                <button class="wf-model" data-model-select aria-haspopup="menu" title="选择模型与思考强度">
+                  <span class="wf-model-name">deepseek-chat</span>
+                  <span class="wf-effort">低</span>
+                  <svg class="ic sm" data-icon="chevron-down"></svg>
+                </button>
+                <button class="icon-btn" data-file-send aria-label="发送文件" title="发送文件（系统选择器）"><svg class="ic" data-icon="paperclip"></svg></button>
+                <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
+                <span class="spacer"></span>
+                <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
+              </div>
             </div>
           </div>
         </section>
@@ -223,40 +228,35 @@ EOF</pre>
                 </div>
               </div>
             </div>
-            <div class="group-label">工具下载源</div>
+            <div class="group-label-row">
+              <span class="group-label">工具下载源</span>
+              <button class="speed-btn" id="speedAll">全部测速</button>
+            </div>
             <div class="card list" id="mirrorList">
               <div class="radio-row">
                 <label class="rr-main"><input type="radio" name="mirror" value="tsinghua" checked /><span class="rr-name">清华 TUNA 镜像</span></label>
                 <span class="rr-status ok">正常</span>
-                <button class="speed-btn" data-speed="tsinghua">测速</button>
                 <span class="speed-result" data-speed-result="tsinghua"></span>
               </div>
               <div class="radio-row">
                 <label class="rr-main"><input type="radio" name="mirror" value="aliyun" /><span class="rr-name">阿里云镜像</span></label>
                 <span class="rr-status ok">正常</span>
-                <button class="speed-btn" data-speed="aliyun">测速</button>
                 <span class="speed-result" data-speed-result="aliyun"></span>
               </div>
               <div class="radio-row">
                 <label class="rr-main"><input type="radio" name="mirror" value="ustc" /><span class="rr-name">中科大镜像</span></label>
                 <span class="rr-status">较慢</span>
-                <button class="speed-btn" data-speed="ustc">测速</button>
                 <span class="speed-result" data-speed-result="ustc"></span>
               </div>
               <div class="radio-row">
                 <label class="rr-main"><input type="radio" name="mirror" value="official" /><span class="rr-name">官方源</span></label>
                 <span class="rr-status warn">可能很慢</span>
-                <button class="speed-btn" data-speed="official">测速</button>
                 <span class="speed-result" data-speed-result="official"></span>
               </div>
             </div>
             <div class="hint"><svg class="ic sm" data-icon="info"></svg>国内环境建议选镜像站；连不上会自动提示你切换。</div>
             <div class="group-label">维护</div>
             <div class="card list">
-              <div class="row">
-                <span class="row-label">一键更新工具</span>
-                <button class="btn tonal sm" id="updateTools">更新</button>
-              </div>
               <div class="row">
                 <span class="row-label">重启容器</span>
                 <button class="btn tonal sm" id="restartBtn">重启</button>
@@ -278,6 +278,35 @@ EOF</pre>
               <div class="recommend-sub">兼容面广，aapt2 的 arm64 社区版覆盖最稳</div>
               <button class="btn filled block" id="installRecommended">一键安装推荐组合</button>
             </div>
+            <div class="group-label">可更新</div>
+            <div class="card list" id="updateList">
+              <div class="row">
+                <span class="row-ic"><svg class="ic sm" data-icon="download"></svg></span>
+                <div class="row-main">
+                  <div class="row-label">JDK <span class="tag warn">17.0.13 → 21.0.5</span></div>
+                  <div class="row-sub">安全修复 + 性能提升</div>
+                </div>
+                <span class="row-val mono">290 MB</span>
+              </div>
+              <div class="row">
+                <span class="row-ic"><svg class="ic sm" data-icon="download"></svg></span>
+                <div class="row-main">
+                  <div class="row-label">Gradle <span class="tag warn">8.9 → 8.14.3</span></div>
+                  <div class="row-sub">构建速度优化</div>
+                </div>
+                <span class="row-val mono">140 MB</span>
+              </div>
+              <div class="row">
+                <span class="row-ic"><svg class="ic sm" data-icon="download"></svg></span>
+                <div class="row-main">
+                  <div class="row-label">Build-Tools <span class="tag warn">34.0.0 → 35.0.0</span></div>
+                  <div class="row-sub">含 aapt2 社区 arm64 版更新</div>
+                </div>
+                <span class="row-val mono">55 MB</span>
+              </div>
+            </div>
+            <button class="btn filled block" id="updateAllTools" style="margin-bottom: 12px;">一键更新 3 个工具</button>
+            <div class="progress-track hidden" id="updateProgress"><div class="progress-fill" id="updateFill" style="width:0%"></div></div>
             <div class="group-label">已安装 / 可选</div>
             <div class="card list" id="toolList">
               <div class="tool-row" data-tool="jdk">

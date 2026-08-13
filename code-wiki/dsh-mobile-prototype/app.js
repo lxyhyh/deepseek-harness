@@ -80,7 +80,10 @@
   document.querySelector("[data-open-drawer]").addEventListener("click", openDrawer);
   scrim.addEventListener("click", closeDrawer);
   document.getElementById("drawerRestart").addEventListener("click", function () { showSnack("正在重启容器…"); });
-  document.getElementById("drawerUpdate").addEventListener("click", function () { showSnack("已开始检查工具更新"); });
+  document.getElementById("drawerUpdate").addEventListener("click", function () {
+    navigate("tools");
+    showSnack("工具更新已移到这里：可更新 3 个工具");
+  });
 
   /* ---------- 深色模式（跟随系统 + 手动三态） ---------- */
   var themeSeg = document.getElementById("themeSeg");
@@ -128,7 +131,6 @@
   });
 
   /* ---------- 设置页：维护按钮 ---------- */
-  document.getElementById("updateTools").addEventListener("click", function () { showSnack("正在更新工具（后台进行中）"); });
   document.getElementById("restartBtn").addEventListener("click", function () { showSnack("正在重启容器…"); });
 
   /* ---------- 网页主体：模型 / 思考强度（dsh ModelSelect 示意） ---------- */
@@ -179,31 +181,38 @@
     });
   });
 
-  /* ---------- 下载源：测速 ---------- */
+  /* ---------- 下载源：全部测速 ---------- */
   var SPEED_RESULTS = {
     tsinghua: { ms: 25,  status: "正常",     cls: "ok" },
     aliyun:   { ms: 48,  status: "正常",     cls: "ok" },
     ustc:     { ms: 128, status: "较慢",     cls: "" },
     official: { ms: 420, status: "可能很慢", cls: "warn" },
   };
-  document.querySelectorAll("[data-speed]").forEach(function (btn) {
-    btn.addEventListener("click", function () {
-      var key = btn.dataset.speed;
-      var row = btn.closest(".radio-row");
+  var speedAll = document.getElementById("speedAll");
+  speedAll.addEventListener("click", function () {
+    speedAll.disabled = true;
+    speedAll.textContent = "测速中…";
+    var rows = Array.prototype.slice.call(document.querySelectorAll("#mirrorList .radio-row"));
+    rows.forEach(function (row) {
+      row.querySelector(".speed-result").textContent = "…";
+    });
+    var done = 0;
+    rows.forEach(function (row, i) {
+      var key = row.querySelector("input[name='mirror']").value;
       var status = row.querySelector(".rr-status");
       var result = row.querySelector(".speed-result");
-      btn.disabled = true;
-      btn.textContent = "测速中…";
-      result.textContent = "";
+      var r = SPEED_RESULTS[key];
       setTimeout(function () {
-        var r = SPEED_RESULTS[key];
-        btn.disabled = false;
-        btn.textContent = "测速";
         result.textContent = r.ms + " ms";
         status.textContent = r.status;
         status.className = "rr-status" + (r.cls ? " " + r.cls : "");
-        showSnack(MIRROR_NAMES[key] + " 延迟约 " + r.ms + " ms");
-      }, 900);
+        done++;
+        if (done === rows.length) {
+          speedAll.disabled = false;
+          speedAll.textContent = "全部测速";
+          showSnack("测速完成：清华 25ms · 阿里 48ms · 中科大 128ms · 官方 420ms");
+        }
+      }, 300 + i * 240);
     });
   });
 
@@ -325,6 +334,26 @@
 
   document.getElementById("installRecommended").addEventListener("click", function () {
     showSnack("正在安装推荐组合（AGP 8.7.2 + Gradle 8.9 + JDK 17）…");
+  });
+
+  /* ---------- 工具管理：一键更新（带进度条） ---------- */
+  var updateProgress = document.getElementById("updateProgress");
+  var updateFill = document.getElementById("updateFill");
+  var updateTimer = null;
+  document.getElementById("updateAllTools").addEventListener("click", function () {
+    clearInterval(updateTimer);
+    updateProgress.classList.remove("hidden");
+    var pct = 0;
+    updateFill.style.width = "0%";
+    updateTimer = setInterval(function () {
+      pct = Math.min(pct + 4, 100);
+      updateFill.style.width = pct + "%";
+      if (pct >= 100) {
+        clearInterval(updateTimer);
+        setTimeout(function () { updateProgress.classList.add("hidden"); }, 600);
+        showSnack("已更新 3 个工具（JDK / Gradle / Build-Tools）");
+      }
+    }, 90);
   });
 
   /* ---------- 环境变量 ---------- */

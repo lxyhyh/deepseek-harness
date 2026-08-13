@@ -218,6 +218,7 @@ body {
 }
 .tag.ok { background: var(--md-success-bg); color: var(--md-success); }
 .tag.gray { background: var(--md-surface-variant); color: var(--md-on-surface-variant); }
+.tag.warn { background: var(--md-warning-bg); color: var(--md-warning); }
 .warn-tag {
   color: var(--md-warning); display: inline-flex; align-items: center; gap: 3px; font-size: 11px;
 }
@@ -264,7 +265,7 @@ body {
 
 /* 模型 / 思考强度菜单（dsh ModelSelect 示意） */
 .model-menu {
-  position: absolute; left: 12px; bottom: 64px; z-index: 55;
+  position: absolute; left: 12px; bottom: 104px; z-index: 55;
   min-width: 210px;
   background: var(--md-surface); color: var(--md-on-surface);
   border-radius: 12px;
@@ -283,14 +284,15 @@ body {
 .mm-opt.active { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
 .mm-divider { height: 1px; background: var(--md-outline-variant); margin: 6px 4px; }
 
-/* composer（网页主体内） */
+/* composer（网页主体内）：输入框一行 + 工具栏一行 */
 .wf-composer {
   flex: none;
-  display: flex; align-items: center; gap: 4px;
-  padding: 8px 10px 14px;
+  padding: 8px 10px 12px;
   background: var(--md-surface);
   border-top: 1px solid var(--md-outline-variant);
 }
+.wf-input-row { margin-bottom: 8px; }
+.wf-toolbar { display: flex; align-items: center; gap: 6px; }
 
 /* 文件卡片（系统选择器发送后） */
 .filecard {
@@ -367,6 +369,12 @@ body {
   font-size: 12px; font-weight: 600; color: var(--md-on-surface-variant);
   margin: 14px 4px 8px; text-transform: uppercase; letter-spacing: .4px;
 }
+/* 分组标题行（标题左侧 + 操作按钮右侧） */
+.group-label-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 14px 4px 8px;
+}
+.group-label-row .group-label { margin: 0; }
 .hint { font-size: 12px; color: var(--md-on-surface-variant); display: flex; gap: 6px; align-items: flex-start; line-height: 1.5; }
 .hint.center { justify-content: center; text-align: center; }
 .hint .ic { margin-top: 1px; flex: none; }
