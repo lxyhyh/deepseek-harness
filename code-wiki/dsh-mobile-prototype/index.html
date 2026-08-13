@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<!--
+  dsh Mobile · 应用 UI 原型（Android 手机应用实现方案 · 7.8）
+  -----------------------------------------------------------
+  Design Contract
+  - stack: vanilla HTML/CSS/JS · pure-static · 单入口 index.html · 离线可开
+  - style tier: brand-themed（Android Material 3 原生基线，用户选定，不做重定制）
+  - aesthetic: 原生 Android 观感，克制、清晰、真实 App；信息密度适中
+  - fonts: 系统字体栈（Roboto / Noto Sans CJK SC），scale 12/14/16/20/24
+  - color: Material 3 baseline（light / dark 两套变量，见 styles.css）
+  - radius: 8 / 12 / 16 / 28（M3）；spacing: 4px 基准
+  - icon: Lucide 内联 SVG（app.js 统一注入），20/24px，stroke 2，currentColor
+  - pages: 7 屏（聊天 / 抽屉 / 安装向导 / 设置 / 工具管理 / 环境变量 / 备份恢复）
+  - 深色模式: 跟随系统(prefers-color-scheme) + 手动三态，驱动整个手机框
+  - mock: 全部示例数据，无真实后端
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>dsh Mobile · 应用 UI 原型</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- 评审控制条（原型演示用，不属于 App 本身） -->
+  <div class="review-bar">
+    <div class="review-brand">
+      <span class="review-logo">dsh</span>
+      <div>
+        <div class="review-title">dsh Mobile · 应用 UI 原型</div>
+        <div class="review-sub">Android 手机应用实现方案 7.8 · 单聊天界面 · Material 3</div>
+      </div>
+    </div>
+    <div class="review-actions">
+      <span class="review-label">屏幕：</span>
+      <div class="review-nav" id="reviewNav">
+        <button class="chip active" data-goto="chat">聊天主界面</button>
+        <button class="chip" data-goto="wizard">安装向导</button>
+        <button class="chip" data-goto="settings">设置</button>
+        <button class="chip" data-goto="tools">工具管理</button>
+        <button class="chip" data-goto="env">环境变量</button>
+        <button class="chip" data-goto="backup">备份恢复</button>
+      </div>
+      <button class="chip theme-chip" id="quickTheme" title="深色/浅色预览切换">
+        <svg class="ic" data-icon="moon"></svg> 深色
+      </button>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="phone" id="phone" data-theme="system">
+      <!-- 状态栏（Android 风格） -->
+      <div class="statusbar">
+        <span class="sb-time">9:41</span>
+        <span class="sb-icons">
+          <svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 1l22 22" stroke-linecap="round"/><rect x="2" y="7" width="15" height="10" rx="2" stroke-linecap="round"/></svg>
+          <svg class="sb-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="6" width="18" height="12" rx="2"/><rect x="22" y="9" width="2" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
+        </span>
+      </div>
+
+      <!-- ============ 屏幕容器 ============ -->
+      <div class="screens" id="screens">
+
+        <!-- ① 聊天主界面 -->
+        <section class="screen active" data-screen="chat">
+          <div class="topappbar">
+            <div class="ta-left">
+              <div class="ta-title">dsh Mobile</div>
+              <div class="ta-sub"><span class="dot ok"></span>容器运行中</div>
+            </div>
+            <button class="icon-btn" data-open-drawer aria-label="菜单"><svg class="ic" data-icon="menu"></svg></button>
+          </div>
+          <div class="chat-scroll">
+            <div class="date-pill">今天 9:41</div>
+            <div class="bubble user">帮我在容器里新建一个项目文件夹 <b>dsh-demo</b>，再放一个 hello.py</div>
+            <div class="bubble ai">
+              好的，我在 Ubuntu 环境里执行：
+              <div class="toolcard">
+                <div class="toolcard-head"><svg class="ic sm" data-icon="terminal"></svg>bash 执行成功 <span class="spacer"></span><span class="tag ok">完成</span></div>
+                <pre class="toolcard-code">mkdir -p ~/projects/dsh-demo
+cat &gt; ~/projects/dsh-demo/hello.py &lt;&lt;'EOF'
+print("hello from dsh on Android")
+EOF</pre>
+                <div class="toolcard-out">✓ 已创建 dsh-demo/hello.py（0.2s）</div>
+              </div>
+            </div>
+            <div class="bubble ai">文件夹和 hello.py 都建好了。要我运行一下看看结果吗？</div>
+            <div class="chips-row">
+              <button class="chip">运行 hello.py</button>
+              <button class="chip">列出文件夹内容</button>
+            </div>
+          </div>
+          <div class="inputbar">
+            <button class="icon-btn" aria-label="更多"><svg class="ic" data-icon="plus"></svg></button>
+            <div class="field-inline">输入消息…</div>
+            <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
+            <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
+          </div>
+        </section>
+
+        <!-- ③ 首次安装向导 -->
+        <section class="screen" data-screen="wizard">
+          <div class="topappbar">
+            <div class="ta-left"><div class="ta-title">首次安装向导</div></div>
+            <button class="icon-btn" data-goto="chat" aria-label="关闭"><svg class="ic" data-icon="x"></svg></button>
+          </div>
+          <div class="wizard-body">
+            <div class="stepper" id="stepper">
+              <div class="step active" data-step="1"><span class="step-ic"><svg class="ic sm" data-icon="package"></svg></span><span>解包环境</span></div>
+              <div class="step-line"></div>
+              <div class="step" data-step="2"><span class="step-ic"><svg class="ic sm" data-icon="key"></svg></span><span>填 API Key</span></div>
+              <div class="step-line"></div>
+              <div class="step" data-step="3"><span class="step-ic"><svg class="ic sm" data-icon="play"></svg></span><span>启动服务</span></div>
+              <div class="step-line"></div>
+              <div class="step" data-step="4"><span class="step-ic"><svg class="ic sm" data-icon="check"></svg></span><span>完成</span></div>
+            </div>
+
+            <div class="wiz-pane active" data-pane="1">
+              <div class="card">
+                <div class="card-title">正在解包 Ubuntu 24 环境…</div>
+                <div class="progress-track"><div class="progress-fill" id="wizProgress" style="width:64%"></div></div>
+                <div class="progress-caption"><span id="wizText">已解包 333 MB / 520 MB</span><span id="wizPct">64%</span></div>
+              </div>
+              <div class="hint"><svg class="ic sm" data-icon="info"></svg>首次安装约需几分钟，请保持屏幕常亮、网络连接。</div>
+            </div>
+
+            <div class="wiz-pane" data-pane="2">
+              <div class="card">
+                <div class="card-title">填 DeepSeek API Key</div>
+                <div class="field"><label>API Key</label><input id="apikeyInput" type="password" placeholder="sk-..." /></div>
+                <div class="hint"><svg class="ic sm" data-icon="info"></svg>只存在手机本地（credentials），不会上传。</div>
+              </div>
+            </div>
+
+            <div class="wiz-pane" data-pane="3">
+              <div class="card center">
+                <div class="spinner"></div>
+                <div class="card-title">正在启动 dsh 服务…</div>
+                <div class="hint">启动容器 → 启动 Web 服务（127.0.0.1:3080）</div>
+              </div>
+            </div>
+
+            <div class="wiz-pane" data-pane="4">
+              <div class="card center">
+                <div class="big-check"><svg class="ic" data-icon="check"></svg></div>
+                <div class="card-title">安装完成！</div>
+                <div class="hint">Ubuntu 环境 + dsh 已就绪，可以开始使用了。</div>
+              </div>
+            </div>
+
+            <div class="wiz-actions">
+              <button class="btn tonal" id="wizPrev">上一步</button>
+              <button class="btn filled" id="wizNext">下一步</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ④ 设置页 -->
+        <section class="screen" data-screen="settings">
+          <div class="topappbar">
+            <div class="ta-left"><div class="ta-title">设置</div></div>
+            <button class="icon-btn" data-goto="chat" aria-label="返回"><svg class="ic" data-icon="arrow-left"></svg></button>
+          </div>
+          <div class="page-scroll">
+            <div class="group-label">模型与密钥</div>
+            <div class="card list">
+              <div class="row">
+                <span class="row-label">DeepSeek API Key</span>
+                <span class="row-val ok">已保存</span>
+                <button class="icon-btn sm" aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+              </div>
+              <div class="row">
+                <span class="row-label">模型</span>
+                <div class="seg">
+                  <button class="seg-btn active">deepseek-chat</button>
+                  <button class="seg-btn">deepseek-reasoner</button>
+                </div>
+              </div>
+            </div>
+            <div class="group-label">环境</div>
+            <div class="card list">
+              <div class="row">
+                <span class="row-label">工作目录</span>
+                <span class="row-val mono">~/projects</span>
+              </div>
+              <div class="row">
+                <span class="row-label">服务端口</span>
+                <span class="row-val mono">127.0.0.1:3080</span>
+              </div>
+            </div>
+            <div class="group-label">外观</div>
+            <div class="card list">
+              <div class="row">
+                <span class="row-label">深色模式</span>
+                <div class="seg" id="themeSeg">
+                  <button class="seg-btn" data-theme-choice="system">跟随系统</button>
+                  <button class="seg-btn" data-theme-choice="light">浅色</button>
+                  <button class="seg-btn" data-theme-choice="dark">深色</button>
+                </div>
+              </div>
+            </div>
+            <div class="group-label">维护</div>
+            <div class="card list">
+              <div class="row">
+                <span class="row-label">一键更新工具</span>
+                <button class="btn tonal sm" id="updateTools">更新</button>
+              </div>
+              <div class="row">
+                <span class="row-label">重启容器</span>
+                <button class="btn tonal sm" id="restartBtn">重启</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ⑤ 工具管理 -->
+        <section class="screen" data-screen="tools">
+          <div class="topappbar">
+            <div class="ta-left"><div class="ta-title">工具管理</div></div>
+            <button class="icon-btn" data-goto="chat" aria-label="返回"><svg class="ic" data-icon="arrow-left"></svg></button>
+          </div>
+          <div class="page-scroll">
+            <div class="recommend card">
+              <div class="recommend-head"><svg class="ic sm" data-icon="sparkles"></svg>推荐组合（2026 主流）</div>
+              <div class="recommend-ver">AGP 8.7.2 · Gradle 8.9 · JDK 17<br/>Build-Tools 34.0.0</div>
+              <div class="recommend-sub">兼容面广，aapt2 的 arm64 社区版覆盖最稳</div>
+              <button class="btn filled block" id="installRecommended">一键安装推荐组合</button>
+            </div>
+            <div class="group-label">已安装 / 可选</div>
+            <div class="card list" id="toolList">
+              <div class="tool-row" data-tool="jdk">
+                <div class="tool-ic"><svg class="ic" data-icon="coffee"></svg></div>
+                <div class="tool-info">
+                  <div class="tool-name">JDK <span class="mono">17</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-size">290 MB · 使用中</div>
+                </div>
+                <button class="icon-btn sm" data-uninstall="jdk" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="tool-row" data-tool="gradle">
+                <div class="tool-ic"><svg class="ic" data-icon="box"></svg></div>
+                <div class="tool-info">
+                  <div class="tool-name">Gradle <span class="mono">8.9</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-size">140 MB</div>
+                </div>
+                <button class="icon-btn sm" data-uninstall="gradle" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="tool-row" data-tool="buildtools">
+                <div class="tool-ic"><svg class="ic" data-icon="hammer"></svg></div>
+                <div class="tool-info">
+                  <div class="tool-name">Build-Tools <span class="mono">34.0.0</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-size">55 MB · <span class="warn-tag"><svg class="ic sm" data-icon="alert-triangle"></svg>官方无 arm64，用社区 drop-in 版</span></div>
+                </div>
+                <button class="icon-btn sm" data-uninstall="buildtools" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="tool-row" data-tool="ndk">
+                <div class="tool-ic"><svg class="ic" data-icon="database"></svg></div>
+                <div class="tool-info">
+                  <div class="tool-name">Android NDK <span class="mono">27.0.12077973</span> <span class="tag gray">未安装</span></div>
+                  <div class="tool-size">约 1.9 GB · 仅含原生(C/C++)代码项目需要</div>
+                </div>
+                <button class="btn tonal sm" data-install-ndk>安装</button>
+              </div>
+            </div>
+            <div class="hint"><svg class="ic sm" data-icon="info"></svg>兼容性按内置矩阵自动提示；版本可多选、可卸载释放空间。</div>
+          </div>
+        </section>
+
+        <!-- ⑥ 环境变量编辑器 -->
+        <section class="screen" data-screen="env">
+          <div class="topappbar">
+            <div class="ta-left"><div class="ta-title">环境变量</div></div>
+            <button class="icon-btn" data-goto="chat" aria-label="返回"><svg class="ic" data-icon="arrow-left"></svg></button>
+          </div>
+          <div class="page-scroll">
+            <div class="card list" id="envList">
+              <div class="env-row" data-key="JAVA_HOME">
+                <div class="env-k"><span class="env-key mono">JAVA_HOME</span><span class="env-val mono">/usr/lib/jvm/java-17-openjdk-arm64</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="env-row" data-key="ANDROID_HOME">
+                <div class="env-k"><span class="env-key mono">ANDROID_HOME</span><span class="env-val mono">/opt/android-sdk</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="env-row" data-key="ANDROID_SDK_ROOT">
+                <div class="env-k"><span class="env-key mono">ANDROID_SDK_ROOT</span><span class="env-val mono">$ANDROID_HOME</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="env-row" data-key="ANDROID_NDK_HOME">
+                <div class="env-k"><span class="env-key mono">ANDROID_NDK_HOME</span><span class="env-val mono">$ANDROID_HOME/ndk/27.0.12077973</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="env-row" data-key="GRADLE_USER_HOME">
+                <div class="env-k"><span class="env-key mono">GRADLE_USER_HOME</span><span class="env-val mono">~/.gradle</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+              <div class="env-row" data-key="PATH">
+                <div class="env-k"><span class="env-key mono">PATH</span><span class="env-val mono">$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:…</span></div>
+                <button class="icon-btn sm" data-edit-env aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
+                <button class="icon-btn sm" data-del-env aria-label="删除"><svg class="ic sm" data-icon="trash"></svg></button>
+              </div>
+            </div>
+            <button class="btn tonal block" id="addEnv"><svg class="ic sm" data-icon="plus"></svg>新增环境变量</button>
+            <div class="hint"><svg class="ic sm" data-icon="info"></svg>修改后需<b>重启容器</b>生效，AI 编译时将继承同一套环境。</div>
+          </div>
+        </section>
+
+        <!-- ⑦ 备份 / 恢复 -->
+        <section class="screen" data-screen="backup">
+          <div class="topappbar">
+            <div class="ta-left"><div class="ta-title">备份与恢复</div></div>
+            <button class="icon-btn" data-goto="chat" aria-label="返回"><svg class="ic" data-icon="arrow-left"></svg></button>
+          </div>
+          <div class="page-scroll">
+            <div class="card center">
+              <div class="big-ic"><svg class="ic" data-icon="archive"></svg></div>
+              <div class="card-title">一键备份</div>
+              <div class="hint center">容器 + 配置 + 会话日志 → 打包到 Download，可换机恢复</div>
+              <button class="btn filled block" id="doBackup">立即备份</button>
+              <div class="progress-track hidden" id="backupProgress"><div class="progress-fill" id="backupFill" style="width:0%"></div></div>
+            </div>
+            <div class="group-label">历史备份</div>
+            <div class="card list">
+              <div class="row">
+                <span class="row-ic"><svg class="ic sm" data-icon="file-archive"></svg></span>
+                <div class="row-main"><div class="row-label">dsh-backup-2026-08-13.tar.gz</div><div class="row-sub">3.2 GB · 今天 9:00</div></div>
+                <button class="btn tonal sm" data-restore>恢复</button>
+              </div>
+              <div class="row">
+                <span class="row-ic"><svg class="ic sm" data-icon="file-archive"></svg></span>
+                <div class="row-main"><div class="row-label">dsh-backup-2026-08-06.tar.gz</div><div class="row-sub">3.1 GB · 8月6日</div></div>
+                <button class="btn tonal sm" data-restore>恢复</button>
+              </div>
+            </div>
+            <div class="hint"><svg class="ic sm" data-icon="info"></svg>恢复会覆盖当前环境，请先确认备份文件来自同一设备体系。</div>
+          </div>
+        </section>
+      </div>
+
+      <!-- ============ 右侧抽屉菜单 ② ============ -->
+      <div class="scrim" id="scrim"></div>
+      <aside class="drawer" id="drawer">
+        <div class="drawer-head">
+          <div class="avatar">d</div>
+          <div>
+            <div class="drawer-title">dsh Mobile</div>
+            <div class="drawer-sub">自用设备 · Android</div>
+          </div>
+        </div>
+        <nav class="drawer-nav">
+          <button class="drawer-item" data-goto="tools"><svg class="ic" data-icon="wrench"></svg>工具管理</button>
+          <button class="drawer-item" data-goto="env"><svg class="ic" data-icon="sliders"></svg>环境变量</button>
+          <button class="drawer-item" data-goto="backup"><svg class="ic" data-icon="archive"></svg>备份与恢复</button>
+          <button class="drawer-item" data-goto="settings"><svg class="ic" data-icon="settings"></svg>设置</button>
+          <div class="drawer-divider"></div>
+          <button class="drawer-item" id="drawerRestart"><svg class="ic" data-icon="power"></svg>重启容器</button>
+          <button class="drawer-item" id="drawerUpdate"><svg class="ic" data-icon="refresh"></svg>一键更新工具</button>
+        </nav>
+      </aside>
+
+      <!-- 底部提示条（Snackbar） -->
+      <div class="snackbar" id="snackbar"></div>
+    </div>
+  </div>
+
+<script src="app.js"></script>
+</body>
+</html>
