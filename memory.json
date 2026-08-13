@@ -1,0 +1,2 @@
+{"type":"entity","name":"Android手机应用项目","entityType":"项目","observations":["基于 dsh（DeepSeek Harness）框架在 Android 手机上本地运行 agent，手机即主机","交付物为实现方案文档，不写代码不打APK","用途：自用，不分发不上商店","第一版最小可用版：AI对话+工具调用、内置Linux、MCP插件生态"]}
+{"type":"entity","name":"用户","entityType":"用户","observations":["不懂开发，需要通俗解释","AI大脑用云端API（DeepSeek等），联网使用","不做无障碍点击操控其它App","跨会话记忆后续再加","愿意 root 手机","root 方式：KernelSU 等框架（su 提权）","Linux环境：chroot Ubuntu 24（需root）","操作边界：隔离，但能读取某些文件夹","App内要做一键备份/恢复"]}
