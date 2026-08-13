@@ -1,6 +1,6 @@
 # Android 手机应用实现方案
 
-> 版本：v0.3（细化版：系统/工具/技能/插件/MCP 详案 + root/chroot 详案）
+> 版本：v0.4（细化版：rootfs 打包策略 + 编译工具链 + 环境变量 + 版本矩阵详案）
 > 日期：2026-08-13
 > 分支：`android`
 
@@ -26,6 +26,13 @@
 | 安装形态 | **一体化 App**（自动装环境，体验接近 Operit） |
 | 手机 root | **愿意 root**，root 方式为 **KernelSU 等框架**（通用 su 提权） |
 | Linux 环境 | **chroot 完整 Ubuntu 24**（与 Operit 同款容器技术），**非 Termux** |
+| rootfs 打包 | **随 APK 打包**（基础工具 + 常用工具链预装，容器包约 400–800MB 可接受）；**SDK/NDK 体积巨大，改为按需安装** |
+| 预装工具 | Python 全套、Node.js 全套、Git/LFS、编译工具链、日常终端工具、JDK、Gradle、AGP、Java、Go、PHP |
+| 编译用途 | 编译 Android 项目、AI 手机本地编译验证、跑 Go/PHP 程序 |
+| SDK/NDK | **按需安装**；工具界面支持查看/选择版本、**卸载**释放空间；**自动推荐一套主流兼容组合**（AGP/Gradle/JDK/SDK） |
+| 版本建议 | **内置版本兼容矩阵**（AGP↔Gradle↔JDK↔SDK）；需**注意部分工具官方无 arm64 版本** |
+| 工具更新 | **手动一键更新**（设置页按钮，触发容器内 apt/工具链更新） |
+| 环境变量 | **预置默认**（JAVA_HOME/ANDROID_HOME/PATH 等）+ **可视化编辑器** |
 | AI 操作边界 | **隔离**：AI 只能在 chroot Ubuntu 内读写执行；对手机本体**只读 /sdcard/Download**（唯一可读文件夹），不可写手机本体 |
 | 备份恢复 | **第一版包含一键备份/恢复**（Ubuntu 环境 + 配置 + 会话日志，可跨机恢复） |
 
@@ -123,12 +130,14 @@
 
 | 模块 | 功能 | 备注 |
 |---|---|---|
-| 环境安装 | 首次启动自动引导：部署 chroot Ubuntu 24 + Node.js + dsh | 一体化 App 的核心体验；需 su 提权 |
-| 提权管理 | 通过 su（KernelSU）启动容器，常驻运行 | 启动/备份才需 root，日常对话不需反复提权 |
+| 环境安装 | 首次启动自动引导：解包预装 rootfs（chroot Ubuntu 24 + 基础工具 + dsh） | 一体化 App 的核心体验；需 su 提权 |
+| 提权管理 | 通过 su（KernelSU）启动容器，常驻运行 | 启动/备份/装 SDK·NDK 才需 root，日常对话不需反复提权 |
 | 服务管理 | 一键启动/停止 dsh Web 服务（127.0.0.1:3080） | 断网重连稳定 |
 | 对话界面 | WebView 加载 dsh Web UI，正常聊天 | 复用 dsh，不重写 UI |
 | 工具调用 | dsh 自带工具（fs/shell/web/subprocess 等）开箱即用 | 对齐 dsh 能力 seam |
 | 内置 Linux | chroot Ubuntu 24：Shell、脚本、apt 装包 | 与 Operit 同款容器 |
+| 工具管理 | 编译工具链界面：查看/安装/卸载 SDK·NDK 等，自动推荐兼容组合 | 按需安装，内置版本矩阵，见 7.2.2/7.2.3 |
+| 环境变量 | 预置默认 + 可视化编辑器（JAVA_HOME/ANDROID_HOME 等） | 编译环境一致性，见 7.2.4 |
 | 插件/MCP | 能在 App 内配置并加载 skill 插件 / MCP 服务器 | 复用 dsh 插件注册表 |
 | 隔离边界 | 容器内自由读写；手机本体仅**只读** `/sdcard/Download` | 满足用户确认的安全边界 |
 | 备份/恢复 | 一键打包容器+配置+会话日志；可跨机恢复 | 自用 root 折腾的兜底 |
@@ -166,26 +175,75 @@
 - 代价：chroot 需要 root 权限——用户已确认愿意 root（KernelSU），此条件成立。
 
 **chroot 容器部署方式（第一版建议）：**
-- App 首次启动自动执行：`su -c` 挂载容器根目录 → 解压随包部署的 Ubuntu rootfs（或脚本从 Ubuntu 官方/镜像拉取）→ 挂载 `/proc` `/dev` `/dev/pts` 等 → 进入 chroot 安装 Node.js 与 dsh。
+- App 首次启动自动执行：`su -c` 挂载容器根目录 → 解压随包部署的 Ubuntu rootfs（**已预装基础工具 + dsh，见 7.2.1**）→ 挂载 `/proc` `/dev` `/dev/pts` 等 → 进入 chroot 校验 dsh 运行。
 - 容器数据目录建议放在 `/data/local/dsh-container`（root 可访问、非易失分区）。
-- 提权仅用于**启动容器 / 备份打包**；容器常驻后，dsh 进程在容器内以普通用户运行，日常对话不需要 root。
+- 提权仅用于**启动容器 / 备份打包 / 按需安装 SDK·NDK**；容器常驻后，dsh 进程在容器内以普通用户运行，日常对话不需要 root。
 
 ### 7.2 安装什么工具（Linux 执行层常用工具）
 
-> 这些工具由 dsh 的 shell 能力（`tool-bash` → `dsh-bash-sandbox` → `dsh-subprocess-local`）在 **chroot Ubuntu 24 容器内**执行。默认组合已启用 `tool-bash`、`tool-fs`、`tool-web` 等（见 base/cordis.patch.yml）。所有工具用 Ubuntu 的 `apt` 安装。
+> 这些工具由 dsh 的 shell 能力（`tool-bash` → `dsh-bash-sandbox` → `dsh-subprocess-local`）在 **chroot Ubuntu 24 容器内**执行。默认组合已启用 `tool-bash`、`tool-fs`、`tool-web` 等（见 base/cordis.patch.yml）。
+>
+> **打包策略：** 工具分两类——**A. 随容器预装**（`apt` 装好后随 rootfs 整体打包，开箱即用，用 apt 更新）；**B. 按需安装**（体积巨大或极少用，首次需要时由 App 引导下载）。
+
+#### 7.2.1 A 类：随容器预装（开箱即用）
 
 | 工具 | 用途 | 安装来源 |
 |---|---|---|
-| `git` | 版本管理、拉取插件/技能 | `apt install git` |
-| `python3` | 跑 Python 脚本（dsh 有 python/ SDK） | `apt install python3` |
-| `nodejs` / `npm` | 运行 dsh 本体 + MCP 服务器（stdio） | `apt install nodejs npm`（或 nodesource 装 LTS ≥ 22） |
+| `git` + `git-lfs` | 版本管理、拉取插件/技能/项目 | `apt install git git-lfs` |
+| `python3` + `pip` + 常用开发库 | 跑 Python 脚本（dsh 有 python/ SDK） | `apt install python3 python3-pip` |
+| `nodejs` ≥ 22 + `npm` | 运行 dsh 本体 + MCP 服务器（stdio） | 官方 arm64 包（nodesource）装 LTS ≥ 22 |
 | `curl` / `wget` | 网络、下载 | `apt install curl wget` |
 | `openssh-client` | （可选）远程排障 | `apt install openssh-client` |
-| `ripgrep` / `fd-find` | 快速搜索（dsh 的 fs-search 工具可调用） | `apt install ripgrep` |
-| `build-essential` | 编译原生依赖（个别 npm 包需要） | `apt install build-essential` |
+| `ripgrep` / `fd-find` | 快速搜索（dsh 的 fs-search 工具可调用） | `apt install ripgrep fd-find` |
+| `build-essential` | 编译原生依赖 | `apt install build-essential` |
+| `go` | 跑 Go 程序 | `apt install golang`（或官方 arm64 tarball） |
+| `php` + `composer` | 跑 PHP 程序 | `apt install php composer` |
 | `bash` / `coreutils` / `file` / `tar` | shell 基础、备份打包 | Ubuntu 自带 |
 
-**注意：** Ubuntu rootfs 默认用户空间较精简，首次部署后先跑 `apt update && apt upgrade`，再装上述工具；不要安装完整桌面环境（非必需，浪费空间）。
+> **架构注意（用户重点提示）：** 以上全部选择 **arm64** 版本（`apt` 在 arm64 rootfs 内默认就是 arm64 架构）。但要核实**部分工具官方是否提供 arm64**：Node.js/Python/Go/JDK/Gradle 官方都有 Linux arm64；个别 CLI 工具若无官方 arm64 二进制，需用源码编译或选社区 arm64 构建（在版本矩阵中标注）。
+
+#### 7.2.2 B 类：按需安装（编译工具链，体积巨大）
+
+> SDK/NDK 体积达 2GB+，**不随容器预装**；由 App 的"工具界面"按需安装。这些工具是"编译 Android 项目 / AI 手机本地编译验证"的核心，装好后在容器内与 dsh 无缝配合。
+
+| 工具 | 用途 | 安装方式 | arm64 可用性 |
+|---|---|---|---|
+| JDK（17/21） | Gradle/AGP 编译运行需要 | `apt install openjdk-17-jdk` 或官方 | ✅ 有 arm64 |
+| Gradle | 构建工具 | 官方发行（含 aarch64 版本） | ✅ 有 arm64 |
+| AGP（Android Gradle Plugin） | Android 构建插件 | Gradle 内声明版本（随项目） | ✅ 纯 Java |
+| Android SDK（platforms/build-tools/platform-tools） | 编译 Android 项目 | Android Studio 官方命令行工具 `sdkmanager` | ⚠️ 部分组件官方有 arm64；`build-tools` 的 `aapt2` 需确认 arm64 支持 |
+| Android NDK | 编译原生 C/C++ 代码 | `sdkmanager` 下载 | ⚠️ NDK 官方提供 arm64 host 工具链 |
+
+**工具界面功能（App 原生页，非 WebView）：**
+- 列出全部可装工具 + 当前已装版本 + 占用空间。
+- **自动推荐一套主流兼容组合**（首次使用时）：如 AGP 8.x + Gradle 8.x + JDK 17 + SDK 35 + NDK 27。
+- 支持**手动选择版本**安装；支持**卸载**已装 SDK/NDK 版本释放空间。
+- **内置版本兼容矩阵**（详见 7.2.3），给出"当前选择组合是否兼容"的提示。
+
+#### 7.2.3 版本兼容矩阵（内置，离线可用）
+
+> 编译工具链存在**强版本耦合**：AGP ↔ Gradle ↔ JDK ↔ Android SDK Build-Tools 之间有官方兼容表。用户要求"根据网上版本关联给出建议"，方案采用**内置矩阵**（离线可靠），发版时随 App 更新。
+
+- 矩阵内容（官方兼容关系，示例）：
+  - AGP 8.4 ↔ Gradle 8.6+ ↔ JDK 17 ↔ Build-Tools 34.0.0
+  - AGP 8.6 ↔ Gradle 8.7+ ↔ JDK 17/21 ↔ Build-Tools 35.0.0
+  - 实际以 Android 官方文档为准，发版时同步。
+- 工具界面在选择版本时，根据矩阵**自动提示兼容组合 / 不兼容警告**，避免装出跑不起来的组合。
+- **注意事项（用户重点提示）：** 矩阵中标注每个工具的 **arm64 可用性**——官方无 arm64 版本的工具，要么提供替代安装源，要么在界面明示"该版本无 arm64，无法在手机安装"，不让用户装了个装不上的东西。
+
+#### 7.2.4 环境变量管理（预置默认 + 可视化编辑）
+
+> 编译工具强依赖环境变量（`JAVA_HOME`、`ANDROID_HOME`、`ANDROID_SDK_ROOT`、`ANDROID_NDK_HOME`、`GRADLE_USER_HOME`、`PATH` 等），且 SDK/NDK 目录结构敏感。方案采用两层管理：
+
+- **预置默认**：App 部署容器时自动写入 shell 配置（`/etc/profile.d/` 或 `~/.bashrc`），默认如下：
+  - `JAVA_HOME=/usr/lib/jvm/...`（按实际 JDK 路径）
+  - `ANDROID_HOME=/opt/android-sdk`、`ANDROID_SDK_ROOT=$ANDROID_HOME`、`ANDROID_NDK_HOME=$ANDROID_HOME/ndk/<ver>`
+  - `GRADLE_USER_HOME=/root/.gradle`（或用户目录）
+  - `PATH` 前缀加入 `$JAVA_HOME/bin`、`$ANDROID_HOME/cmdline-tools/latest/bin`、`$ANDROID_HOME/platform-tools`、`$GOROOT/bin`、`$PATH`
+- **可视化编辑器**：App 设置页提供"环境变量"编辑界面——列出当前变量（键/值/来源），支持新增/修改/删除；修改后写入上述 shell 配置并提示"重启容器生效"。
+- **一致性要求**：dsh 的 shell 工具（`tool-bash`）执行命令时继承容器内已设置的环境变量，确保 AI 编译时拿到的是同一套环境。
+
+**注意：** 首次部署后先跑 `apt update && apt upgrade`，再按需安装工具；不要安装完整桌面环境（非必需，浪费空间）。
 
 ### 7.3 技能（skill）方案
 
@@ -301,13 +359,16 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 - [ ] 设置页（API Key / 模型 / 工作目录）写入 dsh 配置（cordis.yml 覆盖）
 - [ ] 实现隔离边界：只读挂载 `/sdcard/Download`，验证其它手机目录不可访问
 - [ ] 实现一键备份/恢复（打包容器+配置+会话日志，可跨机恢复）
+- [ ] 实现"工具管理"界面：查看/安装/卸载 SDK·NDK 等，内置版本兼容矩阵 + 自动推荐组合（见 7.2.2/7.2.3）
+- [ ] 实现"环境变量"预置 + 可视化编辑器（见 7.2.4），验证 dsh shell 工具继承同一环境
 - [ ] 验证：对话、工具调用、Shell 命令、skill/MCP 加载在 App 内全部可用
 - [ ] 崩溃/重启恢复：服务异常自动拉起，会话日志不丢
 
 ### 阶段 3：验收与收尾
 - [ ] 在已 root 真机验证全流程（含重启手机后容器自动拉起）
+- [ ] 端到端编译验证：App 内克隆一个 Android 项目 → 自动安装兼容的 SDK/NDK 组合 → 本地 `gradle build` 出 APK
 - [ ] 打包自用 APK（自签名即可，无需上商店）
-- [ ] 补充使用文档（面向非开发者：安装→填 Key→使用）
+- [ ] 补充使用文档（面向非开发者：安装→填 Key→使用→编译）
 
 ---
 
@@ -316,9 +377,10 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 1. **可行性验证（阶段 0）**：在已 root（KernelSU）真机上，`su -c` 进入 chroot Ubuntu 24，能启动 dsh 并完成一次对话 → 证明"手机本地跑 dsh + chroot 容器"成立。
 2. **隔离验证（阶段 2）**：容器内确认 `/sdcard/Download` 可读、其它手机目录（如 DCIM、Documents）不可访问、不可写手机本体。
 3. **功能验收（阶段 2）**：App 内完成一个端到端任务——例如"在容器内新建一个文件夹，写一个脚本并运行，输出结果到对话里"。
-4. **稳定性**：App 杀掉重开后，会话历史仍在（依赖 dsh session 持久化）。
-5. **备份恢复**：一键备份 → 清空容器 → 一键恢复 → 会话与配置原样还原。
-6. **安全**：端口仅 localhost 监听（`netstat` 验证）；`su` 提权仅在启动/备份时发生（日志可查）。
+4. **编译工具链验收（阶段 3）**：App 内通过工具界面自动推荐并安装 SDK/NDK 组合 → 克隆一个 Android 项目 → `gradle build` 成功产出 APK（验证 arm64 工具链 + 环境变量 + 版本矩阵端到端可用）。
+5. **稳定性**：App 杀掉重开后，会话历史仍在（依赖 dsh session 持久化）。
+6. **备份恢复**：一键备份 → 清空容器 → 一键恢复 → 会话与配置原样还原。
+7. **安全**：端口仅 localhost 监听（`netstat` 验证）；`su` 提权仅在启动/备份/装 SDK 时发生（日志可查）。
 
 ---
 
@@ -328,7 +390,10 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 |---|---|---|
 | 普通手机性能不足以支撑 Node + dsh 长跑 | 中 | 最小可用版只跑轻量任务；本地模型不纳入第一版；建议用闲置机跑 |
 | chroot + KernelSU 环境兼容问题（rootfs 拉取、su 提权） | 中 | 阶段 0 先做真机可行性验证；卡住则回退 proot（免 root 但更重） |
+| 部分编译工具**官方无 arm64 版本**（如个别 SDK 组件） | 中 | 版本矩阵中标注 arm64 可用性；无 arm64 的给替代源或在界面明示不可装（见 7.2.3） |
+| SDK/NDK 按需安装后占用大量空间 | 中 | 工具界面支持**卸载版本**释放空间；首推自动推荐的最小兼容组合 |
 | root 误操作风险（容器边界被突破） | 中 | 隔离 + 只读挂载 + 最小提权 + 一键备份兜底（见 7.6/7.7） |
+| 容器包 + 按需下载体积大、首启/首次编译耗时长 | 低 | rootfs 压缩包化，按需下载仅 SDK/NDK；进度可视化 |
 | WebView 与 dsh Web UI 交互（剪贴板/文件选择） | 低 | 用 WebView JavaScriptBridge 补齐原生能力桥 |
 | 云端 API 依赖网络 | 低 | 明确告知离线不可用；后续可加本地模型路线 |
 | 沙箱无 Android SDK | 中 | 已确认可安装；如需实际打包，先执行阶段 0 |
@@ -349,5 +414,7 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 
 - [ ] 用户确认本方案文档后，再决定是否进入"阶段 0 可行性验证"或直接开始搭建 App 工程。
 - [ ] 确定 App 名称与包名（自用即可，如 `com.self.dshmobile`）。
-- [ ] 确定 chroot Ubuntu 24 rootfs 的获取方式（随 App 打包 vs 首启脚本拉取），需评估体积与首启耗时。
+- [ ] 细化内置版本矩阵的具体版本号（AGP/Gradle/JDK/SDK/NDK 官方兼容表，发版时随 App 更新）。
+- [ ] 验证个别工具（如 `aapt2`/NDK host 工具链）在 arm64 的官方支持情况，必要时确定替代安装源。
+- [ ] 确定 rootfs 随 APK 打包的压缩方式与体积优化（基础工具 + dsh 预装，目标 400–800MB）。
 - [ ] 若后续要做跨会话记忆，需按 dsh 的"模型可见⟺已记录"原则设计新的 session 事件（届时参考 `.agents/notes` 与 session 文档）。
