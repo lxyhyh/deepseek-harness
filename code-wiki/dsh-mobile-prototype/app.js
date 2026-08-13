@@ -34,7 +34,11 @@
     moon: '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>',
     monitor: '<rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>',
     "file-archive": '<path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 22h4a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h2"/><path d="M10 12h.01"/><path d="M10 16h.01"/><path d="M10 20h.01"/>',
-    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>'
+    download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+    "chevron-down": '<path d="m6 9 6 6 6-6"/>',
+    "chevron-right": '<path d="m9 18 6-6-6-6"/>',
+    paperclip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+    "file-text": '<path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 22h4a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v18a2 2 0 0 0 2 2h2"/><path d="M14 18H9"/><path d="M18 14H9"/><path d="M14 10H9"/>'
   };
 
   function injectIcons(root) {
@@ -126,6 +130,79 @@
   /* ---------- 设置页：维护按钮 ---------- */
   document.getElementById("updateTools").addEventListener("click", function () { showSnack("正在更新工具（后台进行中）"); });
   document.getElementById("restartBtn").addEventListener("click", function () { showSnack("正在重启容器…"); });
+
+  /* ---------- 网页主体：模型 / 思考强度（dsh ModelSelect 示意） ---------- */
+  var modelMenu = document.getElementById("modelMenu");
+  var wfModel = document.querySelector("[data-model-select]");
+  var wfModelName = wfModel.querySelector(".wf-model-name");
+  var wfEffort = wfModel.querySelector(".wf-effort");
+
+  wfModel.addEventListener("click", function (e) {
+    e.stopPropagation();
+    modelMenu.hidden = !modelMenu.hidden;
+  });
+  document.addEventListener("click", function () { modelMenu.hidden = true; });
+  modelMenu.addEventListener("click", function (e) { e.stopPropagation(); });
+  document.querySelectorAll("[data-model-choice]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      wfModelName.textContent = b.dataset.modelChoice;
+      modelMenu.querySelectorAll("[data-model-choice]").forEach(function (x) { x.classList.toggle("active", x === b); });
+      modelMenu.hidden = true;
+      showSnack("已切换到模型 " + b.dataset.modelChoice);
+    });
+  });
+  document.querySelectorAll("[data-effort-choice]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      wfEffort.textContent = b.dataset.effortChoice;
+      modelMenu.querySelectorAll("[data-effort-choice]").forEach(function (x) { x.classList.toggle("active", x === b); });
+      modelMenu.hidden = true;
+      showSnack("思考强度：已设为「" + b.dataset.effortChoice + "」");
+    });
+  });
+
+  /* ---------- 文件发送（系统选择器，原型模拟） ---------- */
+  document.querySelector("[data-file-send]").addEventListener("click", function () {
+    showSnack("打开系统文件选择器…（真机走 SAF，选中后复制进容器）");
+  });
+
+  /* ---------- 设置页：模型与密钥入口（跳 dsh 网页主体） ---------- */
+  document.querySelector("[data-goto-model-settings]").addEventListener("click", function () {
+    navigate("chat");
+    showSnack("模型 / 密钥 / 接口地址在 dsh 网页界面：设置 → 模型 中管理");
+  });
+
+  /* ---------- 工具下载源（镜像站） ---------- */
+  var MIRROR_NAMES = { tsinghua: "清华 TUNA 镜像", aliyun: "阿里云镜像", ustc: "中科大镜像", official: "官方源" };
+  document.querySelectorAll("#mirrorList input[name='mirror']").forEach(function (r) {
+    r.addEventListener("change", function () {
+      showSnack("下载源已切换为：" + MIRROR_NAMES[r.value]);
+    });
+  });
+
+  /* ---------- 备份：打包内容勾选 ---------- */
+  var backupSummary = document.getElementById("backupSummary");
+  var ITEM_META = {
+    config:  { name: "配置", mb: 4 },
+    sessions: { name: "会话", mb: 12 },
+    container: { name: "容器", mb: 2100 },
+    tools:  { name: "工具", mb: 1900 },
+  };
+  function renderBackupSummary() {
+    var picked = [];
+    var mb = 0;
+    document.querySelectorAll("#backupItems input[type='checkbox']").forEach(function (c) {
+      if (c.checked) { picked.push(ITEM_META[c.dataset.item].name); mb += ITEM_META[c.dataset.item].mb; }
+    });
+    var size = mb >= 1024 ? (mb / 1024).toFixed(1) + " GB" : mb + " MB";
+    backupSummary.innerHTML = '<svg class="ic sm" data-icon="info"></svg>当前将打包：<b>' +
+      (picked.length > 0 ? picked.join(" + ") : "（未勾选任何内容）") +
+      '</b>' + (picked.length > 0 ? "（约 " + size + "）" : "");
+    injectIcons(backupSummary);
+  }
+  document.querySelectorAll("#backupItems input[type='checkbox']").forEach(function (c) {
+    c.addEventListener("change", renderBackupSummary);
+  });
+  renderBackupSummary();
 
   /* ---------- 首次安装向导 ---------- */
   var wizStep = 1;

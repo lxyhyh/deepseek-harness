@@ -62,7 +62,7 @@
       <!-- ============ 屏幕容器 ============ -->
       <div class="screens" id="screens">
 
-        <!-- ① 聊天主界面 -->
+        <!-- ① 聊天主界面：原生壳 + dsh 网页主体 -->
         <section class="screen active" data-screen="chat">
           <div class="topappbar">
             <div class="ta-left">
@@ -71,31 +71,62 @@
             </div>
             <button class="icon-btn" data-open-drawer aria-label="菜单"><svg class="ic" data-icon="menu"></svg></button>
           </div>
-          <div class="chat-scroll">
-            <div class="date-pill">今天 9:41</div>
-            <div class="bubble user">帮我在容器里新建一个项目文件夹 <b>dsh-demo</b>，再放一个 hello.py</div>
-            <div class="bubble ai">
-              好的，我在 Ubuntu 环境里执行：
-              <div class="toolcard">
-                <div class="toolcard-head"><svg class="ic sm" data-icon="terminal"></svg>bash 执行成功 <span class="spacer"></span><span class="tag ok">完成</span></div>
-                <pre class="toolcard-code">mkdir -p ~/projects/dsh-demo
+          <!-- 网页主体：dsh Web UI 嵌入区（功能随 dsh 自带） -->
+          <div class="web-frame">
+            <div class="wf-top">
+              <button class="wf-model" data-model-select aria-haspopup="menu">
+                <span class="wf-model-name">deepseek-chat</span>
+                <span class="wf-effort">低</span>
+                <svg class="ic sm" data-icon="chevron-down"></svg>
+              </button>
+              <span class="wf-session">新会话</span>
+              <span class="wf-tag">dsh 网页界面 · 嵌入区</span>
+            </div>
+            <!-- 模型 / 思考强度菜单（dsh ModelSelect 示意） -->
+            <div class="model-menu" id="modelMenu" hidden>
+              <div class="mm-title">模型</div>
+              <button class="mm-opt active" data-model-choice="deepseek-chat">deepseek-chat</button>
+              <button class="mm-opt" data-model-choice="deepseek-reasoner">deepseek-reasoner</button>
+              <div class="mm-divider"></div>
+              <div class="mm-title">思考强度</div>
+              <button class="mm-opt" data-effort-choice="跟随模型默认">跟随模型默认</button>
+              <button class="mm-opt active" data-effort-choice="低">低</button>
+              <button class="mm-opt" data-effort-choice="中">中</button>
+              <button class="mm-opt" data-effort-choice="高">高</button>
+            </div>
+            <div class="wf-chat">
+              <div class="date-pill">今天 9:41</div>
+              <div class="bubble user">帮我在容器里新建一个项目文件夹 <b>dsh-demo</b>，再放一个 hello.py</div>
+              <div class="bubble ai">
+                好的，我在 Ubuntu 环境里执行：
+                <div class="toolcard">
+                  <div class="toolcard-head"><svg class="ic sm" data-icon="terminal"></svg>bash 执行成功 <span class="spacer"></span><span class="tag ok">完成</span></div>
+                  <pre class="toolcard-code">mkdir -p ~/projects/dsh-demo
 cat &gt; ~/projects/dsh-demo/hello.py &lt;&lt;'EOF'
 print("hello from dsh on Android")
 EOF</pre>
-                <div class="toolcard-out">✓ 已创建 dsh-demo/hello.py（0.2s）</div>
+                  <div class="toolcard-out">✓ 已创建 dsh-demo/hello.py（0.2s）</div>
+                </div>
+              </div>
+              <div class="bubble ai">文件夹和 hello.py 都建好了。要我运行一下看看结果吗？</div>
+              <div class="chips-row">
+                <button class="chip">运行 hello.py</button>
+                <button class="chip">列出文件夹内容</button>
+              </div>
+              <!-- 文件发送（系统选择器）示例 -->
+              <div class="bubble user">我发了一个文件给你，在容器里看看它</div>
+              <div class="filecard">
+                <span class="file-ic"><svg class="ic sm" data-icon="file-text"></svg></span>
+                <span class="file-info"><span class="file-name">数据.csv</span><span class="file-meta">123 KB · 已复制到容器 ~/inbox/</span></span>
+                <span class="tag ok">已收到</span>
               </div>
             </div>
-            <div class="bubble ai">文件夹和 hello.py 都建好了。要我运行一下看看结果吗？</div>
-            <div class="chips-row">
-              <button class="chip">运行 hello.py</button>
-              <button class="chip">列出文件夹内容</button>
+            <div class="wf-composer">
+              <button class="icon-btn" data-file-send aria-label="发送文件" title="发送文件（系统选择器）"><svg class="ic" data-icon="paperclip"></svg></button>
+              <div class="field-inline">输入消息…</div>
+              <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
+              <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
             </div>
-          </div>
-          <div class="inputbar">
-            <button class="icon-btn" aria-label="更多"><svg class="ic" data-icon="plus"></svg></button>
-            <div class="field-inline">输入消息…</div>
-            <button class="icon-btn" aria-label="语音"><svg class="ic" data-icon="mic"></svg></button>
-            <button class="icon-btn send" aria-label="发送"><svg class="ic" data-icon="send"></svg></button>
           </div>
         </section>
 
@@ -165,18 +196,12 @@ EOF</pre>
           <div class="page-scroll">
             <div class="group-label">模型与密钥</div>
             <div class="card list">
-              <div class="row">
-                <span class="row-label">DeepSeek API Key</span>
-                <span class="row-val ok">已保存</span>
-                <button class="icon-btn sm" aria-label="编辑"><svg class="ic sm" data-icon="edit"></svg></button>
-              </div>
-              <div class="row">
-                <span class="row-label">模型</span>
-                <div class="seg">
-                  <button class="seg-btn active">deepseek-chat</button>
-                  <button class="seg-btn">deepseek-reasoner</button>
-                </div>
-              </div>
+              <button class="row row-btn" data-goto-model-settings>
+                <span class="row-label">模型、API Key 与接口地址</span>
+                <span class="row-val">在 dsh 界面中管理</span>
+                <svg class="ic sm" data-icon="chevron-right"></svg>
+              </button>
+              <div class="hint" style="padding: 10px 16px 12px;"><svg class="ic sm" data-icon="info"></svg>由 dsh 网页界面自带：设置 → 模型 → 添加提供方 / 填密钥 / 改接口地址。</div>
             </div>
             <div class="group-label">环境</div>
             <div class="card list">
@@ -200,6 +225,14 @@ EOF</pre>
                 </div>
               </div>
             </div>
+            <div class="group-label">工具下载源</div>
+            <div class="card list" id="mirrorList">
+              <label class="radio-row"><input type="radio" name="mirror" value="tsinghua" checked /><span class="rr-name">清华 TUNA 镜像</span><span class="rr-status ok">正常</span></label>
+              <label class="radio-row"><input type="radio" name="mirror" value="aliyun" /><span class="rr-name">阿里云镜像</span><span class="rr-status ok">正常</span></label>
+              <label class="radio-row"><input type="radio" name="mirror" value="ustc" /><span class="rr-name">中科大镜像</span><span class="rr-status">较慢</span></label>
+              <label class="radio-row"><input type="radio" name="mirror" value="official" /><span class="rr-name">官方源</span><span class="rr-status warn">可能很慢</span></label>
+            </div>
+            <div class="hint"><svg class="ic sm" data-icon="info"></svg>国内环境建议选镜像站；连不上会自动提示你切换。</div>
             <div class="group-label">维护</div>
             <div class="card list">
               <div class="row">
@@ -232,34 +265,53 @@ EOF</pre>
               <div class="tool-row" data-tool="jdk">
                 <div class="tool-ic"><svg class="ic" data-icon="coffee"></svg></div>
                 <div class="tool-info">
-                  <div class="tool-name">JDK <span class="mono">17</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-name">JDK <span class="tag ok">已安装</span></div>
                   <div class="tool-size">290 MB · 使用中</div>
                 </div>
-                <button class="icon-btn sm" data-uninstall="jdk" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+                <select class="ver-select" data-ver="jdk">
+                  <option selected>17.0.13（推荐）</option>
+                  <option>21.0.5</option>
+                  <option>8.0.432</option>
+                </select>
+                <button class="icon-btn sm tool-action" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
               </div>
               <div class="tool-row" data-tool="gradle">
                 <div class="tool-ic"><svg class="ic" data-icon="box"></svg></div>
                 <div class="tool-info">
-                  <div class="tool-name">Gradle <span class="mono">8.9</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-name">Gradle <span class="tag ok">已安装</span></div>
                   <div class="tool-size">140 MB</div>
                 </div>
-                <button class="icon-btn sm" data-uninstall="gradle" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+                <select class="ver-select" data-ver="gradle">
+                  <option selected>8.9（推荐）</option>
+                  <option>8.14.3</option>
+                  <option>7.6.4</option>
+                </select>
+                <button class="icon-btn sm tool-action" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
               </div>
               <div class="tool-row" data-tool="buildtools">
                 <div class="tool-ic"><svg class="ic" data-icon="hammer"></svg></div>
                 <div class="tool-info">
-                  <div class="tool-name">Build-Tools <span class="mono">34.0.0</span> <span class="tag ok">已安装</span></div>
+                  <div class="tool-name">Build-Tools <span class="tag ok">已安装</span></div>
                   <div class="tool-size">55 MB · <span class="warn-tag"><svg class="ic sm" data-icon="alert-triangle"></svg>官方无 arm64，用社区 drop-in 版</span></div>
                 </div>
-                <button class="icon-btn sm" data-uninstall="buildtools" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
+                <select class="ver-select" data-ver="buildtools">
+                  <option selected>34.0.0（推荐）</option>
+                  <option>35.0.0</option>
+                  <option>33.0.2</option>
+                </select>
+                <button class="icon-btn sm tool-action" aria-label="卸载"><svg class="ic sm" data-icon="trash"></svg></button>
               </div>
               <div class="tool-row" data-tool="ndk">
                 <div class="tool-ic"><svg class="ic" data-icon="database"></svg></div>
                 <div class="tool-info">
-                  <div class="tool-name">Android NDK <span class="mono">27.0.12077973</span> <span class="tag gray">未安装</span></div>
-                  <div class="tool-size">约 1.9 GB · 仅含原生(C/C++)代码项目需要</div>
+                  <div class="tool-name">Android NDK <span class="tag gray">未安装</span></div>
+                  <div class="tool-size">约 1.9 GB · <span class="warn-tag"><svg class="ic sm" data-icon="alert-triangle"></svg>官方无 arm64，用社区构建版</span> · 仅原生(C/C++)项目需要</div>
                 </div>
-                <button class="btn tonal sm" data-install-ndk>安装</button>
+                <select class="ver-select" data-ver="ndk">
+                  <option selected>27.0.12077973（社区构建）</option>
+                  <option>26.1.10909125（社区构建）</option>
+                </select>
+                <button class="btn tonal sm tool-action">安装</button>
               </div>
             </div>
             <div class="hint"><svg class="ic sm" data-icon="info"></svg>兼容性按内置矩阵自动提示；版本可多选、可卸载释放空间。</div>
@@ -317,11 +369,18 @@ EOF</pre>
             <button class="icon-btn" data-goto="chat" aria-label="返回"><svg class="ic" data-icon="arrow-left"></svg></button>
           </div>
           <div class="page-scroll">
-            <div class="card center">
-              <div class="big-ic"><svg class="ic" data-icon="archive"></svg></div>
+            <div class="card">
               <div class="card-title">一键备份</div>
-              <div class="hint center">容器 + 配置 + 会话日志 → 打包到 Download，可换机恢复</div>
-              <button class="btn filled block" id="doBackup">立即备份</button>
+              <div class="hint" style="margin-top:6px;">容器 + 配置 + 会话日志 → 打包到 Download，可换机恢复</div>
+              <div class="group-label" style="margin-top:12px;">打包内容</div>
+              <div class="backup-items" id="backupItems">
+                <label class="check-row"><input type="checkbox" data-item="config" checked /><span class="ck-name">配置与凭据</span><span class="ck-size">约 4 MB</span></label>
+                <label class="check-row"><input type="checkbox" data-item="sessions" checked /><span class="ck-name">会话记录</span><span class="ck-size">约 12 MB</span></label>
+                <label class="check-row"><input type="checkbox" data-item="container" /><span class="ck-name">容器环境（Ubuntu rootfs）</span><span class="ck-size">约 2.1 GB</span></label>
+                <label class="check-row"><input type="checkbox" data-item="tools" /><span class="ck-name">已装工具（SDK/NDK 等）</span><span class="ck-size">约 1.9 GB</span></label>
+              </div>
+              <div class="hint" id="backupSummary" style="margin-top:10px;"><svg class="ic sm" data-icon="info"></svg>当前将打包：<b>配置 + 会话</b>（约 16 MB）</div>
+              <button class="btn filled block" id="doBackup" style="margin-top:12px;">立即备份</button>
               <div class="progress-track hidden" id="backupProgress"><div class="progress-fill" id="backupFill" style="width:0%"></div></div>
             </div>
             <div class="group-label">历史备份</div>
@@ -356,7 +415,7 @@ EOF</pre>
           <button class="drawer-item" data-goto="tools"><svg class="ic" data-icon="wrench"></svg>工具管理</button>
           <button class="drawer-item" data-goto="env"><svg class="ic" data-icon="sliders"></svg>环境变量</button>
           <button class="drawer-item" data-goto="backup"><svg class="ic" data-icon="archive"></svg>备份与恢复</button>
-          <button class="drawer-item" data-goto="settings"><svg class="ic" data-icon="settings"></svg>设置</button>
+          <button class="drawer-item" data-goto="settings"><svg class="ic" data-icon="settings"></svg>设置（含镜像源）</button>
           <div class="drawer-divider"></div>
           <button class="drawer-item" id="drawerRestart"><svg class="ic" data-icon="power"></svg>重启容器</button>
           <button class="drawer-item" id="drawerUpdate"><svg class="ic" data-icon="refresh"></svg>一键更新工具</button>
