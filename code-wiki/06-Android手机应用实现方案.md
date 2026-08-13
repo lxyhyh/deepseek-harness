@@ -1,6 +1,6 @@
 # Android 手机应用实现方案
 
-> 版本：v0.4（细化版：rootfs 打包策略 + 编译工具链 + 环境变量 + 版本矩阵详案）
+> 版本：v0.5（细化版：aapt2/NDK 的 ARM64 替代策略 + 版本矩阵校准）
 > 日期：2026-08-13
 > 分支：`android`
 
@@ -211,23 +211,28 @@
 | JDK（17/21） | Gradle/AGP 编译运行需要 | `apt install openjdk-17-jdk` 或官方 | ✅ 有 arm64 |
 | Gradle | 构建工具 | 官方发行（含 aarch64 版本） | ✅ 有 arm64 |
 | AGP（Android Gradle Plugin） | Android 构建插件 | Gradle 内声明版本（随项目） | ✅ 纯 Java |
-| Android SDK（platforms/build-tools/platform-tools） | 编译 Android 项目 | Android Studio 官方命令行工具 `sdkmanager` | ⚠️ 部分组件官方有 arm64；`build-tools` 的 `aapt2` 需确认 arm64 支持 |
-| Android NDK | 编译原生 C/C++ 代码 | `sdkmanager` 下载 | ⚠️ NDK 官方提供 arm64 host 工具链 |
+| Android SDK（platforms/build-tools/platform-tools） | 编译 Android 项目 | Android Studio 官方命令行工具 `sdkmanager` | ⚠️ 官方 build-tools 的 `aapt2` **无 arm64 Linux 版**；需社区构建或 Box64（见 7.2.5） |
+| Android NDK | 编译原生 C/C++ 代码 | `sdkmanager` 下载 | ⚠️ 官方 Linux 仅 x86_64 host；arm64 host 需社区构建或 Box64（见 7.2.5） |
 
 **工具界面功能（App 原生页，非 WebView）：**
 - 列出全部可装工具 + 当前已装版本 + 占用空间。
 - **自动推荐一套主流兼容组合**（首次使用时）：如 AGP 8.x + Gradle 8.x + JDK 17 + SDK 35 + NDK 27。
 - 支持**手动选择版本**安装；支持**卸载**已装 SDK/NDK 版本释放空间。
 - **内置版本兼容矩阵**（详见 7.2.3），给出"当前选择组合是否兼容"的提示。
+- 对 aapt2/NDK 等无官方 arm64 的工具，界面展示**替代安装方案**（社区构建 / Box64）并标记来源（见 7.2.5）。
 
 #### 7.2.3 版本兼容矩阵（内置，离线可用）
 
 > 编译工具链存在**强版本耦合**：AGP ↔ Gradle ↔ JDK ↔ Android SDK Build-Tools 之间有官方兼容表。用户要求"根据网上版本关联给出建议"，方案采用**内置矩阵**（离线可靠），发版时随 App 更新。
 
-- 矩阵内容（官方兼容关系，示例）：
-  - AGP 8.4 ↔ Gradle 8.6+ ↔ JDK 17 ↔ Build-Tools 34.0.0
-  - AGP 8.6 ↔ Gradle 8.7+ ↔ JDK 17/21 ↔ Build-Tools 35.0.0
-  - 实际以 Android 官方文档为准，发版时同步。
+- 矩阵内容（官方兼容关系，2026-08 校准，AGP 8.x/9.x 均要求 JDK 17 起）：
+  - AGP 8.4 ↔ Gradle 8.6 ↔ JDK 17 ↔ Build-Tools 34.0.0
+  - AGP 8.6 ↔ Gradle 8.7 ↔ JDK 17 ↔ Build-Tools 34.0.0
+  - AGP 8.7 ↔ Gradle 8.9 ↔ JDK 17 ↔ Build-Tools 34.0.0 ↔ 默认 NDK 27.0.12077973
+  - AGP 8.10–8.13 ↔ Gradle 8.11.1 / 8.13 ↔ JDK 17 ↔ Build-Tools 35.0.0
+  - AGP 9.0–9.2 ↔ Gradle 9.1.0 / 9.3.1 / 9.4.1 ↔ JDK 17 ↔ Build-Tools 36.0.0
+  - 发版时以 Android 官方「AGP 版本说明」页为准同步。
+- **首推稳定组合（2026 主流，工具界面默认推荐）：** AGP 8.7.2 + Gradle 8.9 + JDK 17 + Build-Tools 34.0.0 +（仅含 native 代码项目需要）NDK 27.0.12077973——老项目兼容面广、aapt2 的 arm64 drop-in 覆盖最稳。
 - 工具界面在选择版本时，根据矩阵**自动提示兼容组合 / 不兼容警告**，避免装出跑不起来的组合。
 - **注意事项（用户重点提示）：** 矩阵中标注每个工具的 **arm64 可用性**——官方无 arm64 版本的工具，要么提供替代安装源，要么在界面明示"该版本无 arm64，无法在手机安装"，不让用户装了个装不上的东西。
 
@@ -244,6 +249,46 @@
 - **一致性要求**：dsh 的 shell 工具（`tool-bash`）执行命令时继承容器内已设置的环境变量，确保 AI 编译时拿到的是同一套环境。
 
 **注意：** 首次部署后先跑 `apt update && apt upgrade`，再按需安装工具；不要安装完整桌面环境（非必需，浪费空间）。
+
+#### 7.2.5 aapt2 / NDK 的 ARM64 替代策略（详案，已核实 2026-08-13）
+
+> **结论先行：Google 官方发布的 build-tools（含 aapt2）只有 linux-x86_64 版本；NDK 官方也只有 linux-x86_64 host 工具链。两者官方均无 arm64 Linux 版。** 但均有成熟替代方案，不会卡死编译链路。AOSP 自身只随发布 linux-x86 prebuilt（Commit451 项目 2026-05 实测确认，Soong 无法产出 glibc-arm64 host 工具）。
+
+**按项目类型分层（先判断装什么）：**
+
+| 项目类型 | 需要 aapt2？ | 需要 NDK？ | arm64 处理 |
+|---|---|---|---|
+| 纯 Java/Kotlin 项目（无 native 代码） | ✅ | ❌ **不需要** | 只解决 aapt2；NDK 完全不装（省 1GB+） |
+| 含 C/C++（JNI / native）项目 | ✅ | ✅ | 两者都要解决 |
+
+**方案 A：社区预编译 drop-in 二进制（首选，零编译）**
+- **aapt2 / aidl / zipalign / split-select**：项目 `Commit451/android-arm-build-tools`
+  - 用 CMake + `gcc-aarch64-linux-gnu` 交叉编译出的 **glibc-arm64** 二进制，与官方 SDK 目录同构；
+  - "drop-in"：把文件替换进 `<SDK>/build-tools/<version>/` 对应文件名即可，Gradle/AGP **无需任何改动**；
+  - 持续维护（2026-06 仍在更新），已覆盖到 build-tools 37.0.0；
+  - 备用源：`hamza72x/android-sdk-linux-arm64`（⚠️ 2026-04 已放弃维护，仅作兜底）。
+- **NDK host 工具链（如确需完整官方工具链）**：`SnowNF/ndk-aarch64-linux`（r29，从 AOSP `llvm-toolchain` 源码构建 arm64 host）——构建复杂、体积大，仅在必须时选用。
+
+**方案 B：Box64 转译官方 x86_64 二进制（兜底，零编译、任何版本可用）**
+- 容器内安装 Box64（apt 或源码编译），并在 chroot 内**手动注册 binfmt_misc**（Android 无 systemd，需 `mount -t binfmt_misc` + 写入 register 规则）；
+- 用 `box64 <path>/aapt2` 直接运行官方 x86_64 的 aapt2/zipalign（社区已在 arm64 Debian chroot 实测跑通完整命令行 APK 构建）；
+- **纯 Java 工具 d8 / apksigner 是 Java 程序，arm64 原生直接跑，无需转译**；
+- 优点：不依赖社区版本、任何 build-tools/NDK 版本都能用；缺点：转译有约 20–50% 性能损耗，NDK 的 clang/lld 等复杂工具转译可能有兼容问题，编译大项目明显变慢。
+
+**方案 C：混合工具链（NDK 专用，跳过 NDK host 工具）**
+- 不运行 NDK 里的 x86_64 host 工具；改用**系统原生 arm64 clang / cmake / ninja**，只借用 NDK 的 **sysroot / 头文件 / libc++ / native_app_glue**；
+- 用自定义 CMake toolchain 文件交叉编译到 `aarch64-linux-android` 目标（社区 `babaolu/arm-ndk` 已验证：S23 Ultra 上跑通带 Vulkan 的 native 工程）；
+- 适用于"需要 native 但不想折腾 NDK host 工具"的场景。
+
+**第一版推荐落地路径：**
+1. 工具界面默认推荐 **AGP 8.7.2 + Gradle 8.9 + JDK 17 + Build-Tools 34.0.0**；Build-Tools 下载后自动用**方案 A** 的 drop-in 二进制替换 aapt2/aidl/zipalign（界面校验 SHA）；
+2. 纯 Java/Kotlin 项目：只装 SDK，**不装 NDK**；
+3. 含 native 项目：先试 方案 A（社区 NDK）→ 不行再 方案 C（混合工具链）→ 最后 方案 B（Box64 全转译）；
+4. 工具界面把"官方无 arm64"标为黄标，显示"已用社区 arm64 版 / Box64 转译"的替代来源，可一键切换。
+
+**实测证据（供实现阶段引用）：**
+- felix021 gist（2026-05）：arm64 Debian chroot 内 Box64 转译 aapt2/zipalign + 原生 d8/apksigner，纯命令行完成 APK 构建；
+- Commit451 MIGRATION（2026-05-20）：确认 AOSP 只发 linux-x86 prebuilt、Soong 无 glibc-arm64 输出，改 CMake 交叉编译后产出可用的 glibc-arm64 aapt2。
 
 ### 7.3 技能（skill）方案
 
@@ -390,7 +435,7 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 |---|---|---|
 | 普通手机性能不足以支撑 Node + dsh 长跑 | 中 | 最小可用版只跑轻量任务；本地模型不纳入第一版；建议用闲置机跑 |
 | chroot + KernelSU 环境兼容问题（rootfs 拉取、su 提权） | 中 | 阶段 0 先做真机可行性验证；卡住则回退 proot（免 root 但更重） |
-| 部分编译工具**官方无 arm64 版本**（如个别 SDK 组件） | 中 | 版本矩阵中标注 arm64 可用性；无 arm64 的给替代源或在界面明示不可装（见 7.2.3） |
+| 部分编译工具**官方无 arm64 版本**（aapt2/NDK 已核实确认） | 中 | 版本矩阵标注 arm64 可用性；aapt2/NDK 用"社区 drop-in + Box64 兜底 + 纯 Java 免 NDK"策略（见 7.2.5） |
 | SDK/NDK 按需安装后占用大量空间 | 中 | 工具界面支持**卸载版本**释放空间；首推自动推荐的最小兼容组合 |
 | root 误操作风险（容器边界被突破） | 中 | 隔离 + 只读挂载 + 最小提权 + 一键备份兜底（见 7.6/7.7） |
 | 容器包 + 按需下载体积大、首启/首次编译耗时长 | 低 | rootfs 压缩包化，按需下载仅 SDK/NDK；进度可视化 |
@@ -414,7 +459,8 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 
 - [ ] 用户确认本方案文档后，再决定是否进入"阶段 0 可行性验证"或直接开始搭建 App 工程。
 - [ ] 确定 App 名称与包名（自用即可，如 `com.self.dshmobile`）。
-- [ ] 细化内置版本矩阵的具体版本号（AGP/Gradle/JDK/SDK/NDK 官方兼容表，发版时随 App 更新）。
-- [ ] 验证个别工具（如 `aapt2`/NDK host 工具链）在 arm64 的官方支持情况，必要时确定替代安装源。
+- [x] 内置版本矩阵：已按官方数据校准 AGP 8.4–9.2 ↔ Gradle ↔ JDK 17 ↔ Build-Tools 34/35/36 的对应关系，并给出首推稳定组合（见 7.2.3）。
+- [x] aapt2 / NDK host 工具链的 arm64 官方支持情况已核实（2026-08-13）：官方均无 arm64 Linux 版；替代源与落地路径见 7.2.5（社区 drop-in → 混合工具链 → Box64）。
+- [ ] 真机实测 Community drop-in 二进制（Commit451 aapt2）在 chroot Ubuntu 24 内的 `gradle build` 全流程（作为阶段 3 验收项）。
 - [ ] 确定 rootfs 随 APK 打包的压缩方式与体积优化（基础工具 + dsh 预装，目标 400–800MB）。
 - [ ] 若后续要做跨会话记忆，需按 dsh 的"模型可见⟺已记录"原则设计新的 session 事件（届时参考 `.agents/notes` 与 session 文档）。
