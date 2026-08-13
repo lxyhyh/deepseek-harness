@@ -1,6 +1,6 @@
 # Android 手机应用实现方案
 
-> 版本：v0.2（细化版：系统/工具/技能/插件/MCP 详案）
+> 版本：v0.3（细化版：系统/工具/技能/插件/MCP 详案 + root/chroot 详案）
 > 日期：2026-08-13
 > 分支：`android`
 
@@ -15,7 +15,7 @@
 | 决策点 | 结论 |
 |---|---|
 | 交付物 | **实现方案文档**（本文档），本轮不写代码、不打 APK |
-| 架构形态 | **手机本地跑 dsh 核心**（手机即主机，参考 openclaw-termux 模式） |
+| 架构形态 | **手机本地跑 dsh 核心**（手机即主机，参考 Operit 的 chroot 容器方案） |
 | 操作入口 | **手机上装一个一体化 App**（不是纯浏览器） |
 | AI 大脑 | **云端 API**（DeepSeek 等），联网使用，不依赖本地模型 |
 | 核心能力 | AI 对话 + 工具调用、内置 Linux 执行环境、插件/MCP 生态 |
@@ -23,7 +23,11 @@
 | 跨会话记忆 | **后续再加**（第一版用 dsh 自带会话日志即可） |
 | 用途 | **自用**，不分发、不上商店 |
 | 第一版范围 | **最小可用版**：能打开对话、能调工具、能跑 Linux 命令、能装 MCP 插件 |
-| 安装形态 | **一体化 App**（自动装环境，体验接近 Operit；不用用户手动装 Termux） |
+| 安装形态 | **一体化 App**（自动装环境，体验接近 Operit） |
+| 手机 root | **愿意 root**，root 方式为 **KernelSU 等框架**（通用 su 提权） |
+| Linux 环境 | **chroot 完整 Ubuntu 24**（与 Operit 同款容器技术），**非 Termux** |
+| AI 操作边界 | **隔离**：AI 只能在 chroot Ubuntu 内读写执行；对手机本体**只读 /sdcard/Download**（唯一可读文件夹），不可写手机本体 |
+| 备份恢复 | **第一版包含一键备份/恢复**（Ubuntu 环境 + 配置 + 会话日志，可跨机恢复） |
 
 ---
 
@@ -39,7 +43,7 @@
 
 | 参考对象 | 可借鉴能力 | 本项目取舍 |
 |---|---|---|
-| **Operit AI** | 手机本地一体化体验、chroot Linux 环境、App 化安装 | 借鉴"手机即主机 + App 一体化"；**不做**无障碍点击操控、不做本地模型推理 |
+| **Operit AI** | 手机本地一体化体验、**chroot Ubuntu 24 容器**、App 化安装、root/KernelSU 集成 | 借鉴"手机即主机 + chroot Ubuntu + App 一体化 + su 提权"；**不做**无障碍点击操控、不做本地模型推理 |
 | **Hermes Agent** | 跨会话持久记忆（FTS5 + 摘要）、技能自动沉淀、cron 定时、MCP 集成、多后端 | 记忆、技能、定时 → **列入后续阶段**；MCP 集成 → **第一版纳入**（dsh 已有 MCP 相关 seam） |
 | **OpenClaw** | 网关 + 技能插件生态、本地/云端双模型路线 | 借鉴"技能插件 = 手脚库"的思路；聊天渠道接入（微信/飞书等）→ 后续阶段 |
 | **OpenCode** | 多模型切换、Plan/Build 双模式、Client/Server 分离 | 借鉴多模型可切换、任务规划模式；CLI/TUI 形态 → 本项目用 App 界面 |
@@ -55,13 +59,14 @@
 │  ┌────────────────────────────────────────────────────┐  │
 │  │            一体化 App（Kotlin/Compose）              │  │
 │  │  ├─ WebView 容器 → 加载 dsh Web UI（127.0.0.1:3080） │  │
-│  │  ├─ 环境管理：首次启动自动引导安装 dsh 运行时         │  │
-│  │  ├─ 服务守护：后台启动/停止 dsh 服务                 │  │
+│  │  ├─ 环境管理：首次启动自动引导 chroot + Ubuntu + dsh │  │
+│  │  ├─ 提权管理：通过 su（KernelSU 框架）启动容器        │  │
+│  │  ├─ 备份/恢复：一键打包/还原（环境+配置+日志）        │  │
 │  │  └─ 设置页：API Key、模型选择、目录选择             │  │
 │  └──────────────────┬─────────────────────────────────┘  │
 │                     │ HTTP/WebSocket (localhost)          │
 │  ┌──────────────────▼─────────────────────────────────┐  │
-│  │     dsh 运行时（在手机内 Linux 环境中运行）           │  │
+│  │    dsh 运行时（chroot 容器内的 Ubuntu 24 中运行）    │  │
 │  │  ├─ Node.js (>=22.19)                               │  │
 │  │  ├─ dsh 核心（agent 循环 / session / 工具 / 插件）    │  │
 │  │  ├─ dsh Web 服务（端口 3080）                        │  │
@@ -69,8 +74,15 @@
 │  └────────────────────────────────────────────────────┘  │
 │                                                          │
 │  ┌────────────────────────────────────────────────────┐  │
-│  │  Linux 运行环境（Termux 或 proot 轻量发行版）          │  │
-│  │  文件系统 / Python / git / 常用工具                  │  │
+│  │  chroot 容器：完整 Ubuntu 24（随 App 或脚本部署）      │  │
+│  │  /bin /usr /etc /var /home /root                    │  │
+│  │  Python / Node.js / git / apt 全部可用              │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                          │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  手机本体访问（隔离边界，仅只读）                     │  │
+│  │  ├─ 只读挂载：/sdcard/Download（唯一可读）           │  │
+│  │  └─ 其余手机目录（DCIM/Documents/系统等）不可访问     │  │
 │  └────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────┘
              │
@@ -79,10 +91,12 @@
 ```
 
 **关键点说明：**
-- 手机里的 Linux 环境是"执行层"，dsh 的 shell 能力在这个环境里跑命令、读文件——这就是"内置 Linux 环境"。
+- 手机里的 **chroot 容器（完整 Ubuntu 24）** 是"执行层"，dsh 的 shell 能力在这个环境里跑命令、读文件——这就是"内置 Linux 环境"，与 Operit 同款容器技术。
 - App 用系统 WebView 加载 dsh 自带 Web UI，天然获得对话、工具卡片、会话历史展示，**不用重写 UI**。
 - 所有数据（会话日志、配置）留在手机本地；只有请求大模型时，把对话指令发给云端 API（与 Operit 云端模式一致）。
-- 不做无障碍操控，因此 App 权限极小（仅网络 + 本地文件），误操作风险低。
+- **隔离边界**：AI（dsh 及其 shell 工具）默认工作目录在 chroot 容器内部，只能读写容器内文件；对手机本体的访问被限制为**只读挂载 `/sdcard/Download`**（唯一可读目录），容器内不可写手机其它目录。
+- **提权**：chroot 挂载需要 root，App 通过 `su`（KernelSU 框架提供）启动容器；日常对话无需反复提权（容器常驻），仅启动/备份等操作需要 root。
+- 不做无障碍操控，App 权限极小，误操作风险集中在容器内部（容器可随时整体备份/恢复，见 8.4）。
 
 ---
 
@@ -92,11 +106,14 @@
 |---|---|---|
 | 手机 App | Kotlin + Jetpack Compose | 现代 Android 官方栈，一体化体验 |
 | WebView | Android 系统 WebView + JavaScriptBridge | 复用 dsh Web UI，无需重做界面 |
-| Linux 环境 | Termux（推荐） 或 proot-distro（Ubuntu） | Termux 最轻、apt 可用；后续需要更完整发行版时用 proot |
-| dsh 运行时 | Node.js ≥ 22.19（Termux 提供） | dsh 硬性要求（见仓库 AGENTS.md） |
+| 提权 | `su`（KernelSU 框架） | 启动 chroot 容器需要 root；KernelSU 兼容通用 su 协议 |
+| Linux 容器 | **chroot 完整 Ubuntu 24.04**（随 App 部署） | 与 Operit 同款；apt 全套可用，接近真电脑 |
+| dsh 运行时 | Node.js ≥ 22.19（Ubuntu 内 apt 安装） | dsh 硬性要求（见仓库 AGENTS.md） |
 | 数据 | dsh 自带 session 持久化（SQLite/JSONL） | 会话历史本地落盘，天然满足"模型可见⟺可记录" |
+| 隔离 | 容器只读挂载 `/sdcard/Download`；其余手机目录不可见 | 满足"隔离 + 仅可读下载目录"的安全边界 |
+| 备份 | 打包容器 + 配置 + 会话日志为一个归档 | 自用 root 折腾，需可整体恢复 |
 | 构建 | Gradle + Android SDK（沙箱需先安装 SDK） | Android 官方构建链 |
-| 目标设备 | 普通 Android 手机（API 26+，约 Android 8.0+） | 覆盖主流机型 |
+| 目标设备 | 已 root 的 Android 手机（API 26+，约 Android 8.0+） | 需 KernelSU/su 才能跑 chroot |
 
 ---
 
@@ -106,14 +123,17 @@
 
 | 模块 | 功能 | 备注 |
 |---|---|---|
-| 环境安装 | 首次启动自动引导安装 Linux 运行时 + Node.js + dsh | 一体化 App 的核心体验 |
-| 服务管理 | 一键启动/停止 dsh Web 服务（127.0.0.1:3080） | 常驻运行，断网重连稳定 |
+| 环境安装 | 首次启动自动引导：部署 chroot Ubuntu 24 + Node.js + dsh | 一体化 App 的核心体验；需 su 提权 |
+| 提权管理 | 通过 su（KernelSU）启动容器，常驻运行 | 启动/备份才需 root，日常对话不需反复提权 |
+| 服务管理 | 一键启动/停止 dsh Web 服务（127.0.0.1:3080） | 断网重连稳定 |
 | 对话界面 | WebView 加载 dsh Web UI，正常聊天 | 复用 dsh，不重写 UI |
 | 工具调用 | dsh 自带工具（fs/shell/web/subprocess 等）开箱即用 | 对齐 dsh 能力 seam |
-| 内置 Linux | 能执行 Shell 命令、跑脚本、装工具 | 通过 dsh shell 能力 |
+| 内置 Linux | chroot Ubuntu 24：Shell、脚本、apt 装包 | 与 Operit 同款容器 |
 | 插件/MCP | 能在 App 内配置并加载 skill 插件 / MCP 服务器 | 复用 dsh 插件注册表 |
+| 隔离边界 | 容器内自由读写；手机本体仅**只读** `/sdcard/Download` | 满足用户确认的安全边界 |
+| 备份/恢复 | 一键打包容器+配置+会话日志；可跨机恢复 | 自用 root 折腾的兜底 |
 | 设置页 | API Key、模型选择、工作目录、启动/停止 | 原生设置页（非 WebView） |
-| 安全 | 服务仅绑定 localhost，禁止外部访问 | 与 Operit 云端模式一致的安全性 |
+| 安全 | 服务仅绑定 localhost；容器隔离；root 仅在必要时提权 | 综合 Operit 安全性 + 隔离策略 |
 
 ### 6.2 后续阶段（本方案仅规划，不在第一版）
 
@@ -134,31 +154,38 @@
 
 | 层次 | 选型 | 说明 |
 |---|---|---|
-| 手机宿主 OS | Android 8.0+（API 26+） | 覆盖主流机型；自用无需商店合规 |
-| Linux 运行时 | **Termux**（推荐，第一版） | 轻量、apt 可用、有 Node.js 官方包；App 通过其 API 自动管理 |
-| 备选 | **proot-distro / Ubuntu** | 需要更完整发行版时（后续阶段）切换；dsh 无系统绑定 |
-| Node.js | `nodejs-lts`（≥ 22.19） | dsh 硬性要求（仓库 AGENTS.md）；Termux 提供 LTS |
-| 包管理器 | pnpm（Node 自带 corepack） | 用于安装 dsh 及其 workspace 依赖 |
+| 手机宿主 OS | Android 8.0+（API 26+），**已 root**（KernelSU 等框架） | chroot 需要 root 挂载容器 |
+| Root 框架 | KernelSU（兼容通用 su 协议） | 用户已确认采用 KernelSU 等框架 |
+| Linux 容器 | **chroot 完整 Ubuntu 24.04**（随 App 打包/脚本部署） | 与 Operit 同款容器技术；`apt` 全套可用 |
+| Node.js | Node.js ≥ 22.19（Ubuntu 内 apt 安装） | dsh 硬性要求（仓库 AGENTS.md） |
+| 包管理器 | pnpm / npm（Ubuntu 内安装） | 安装 dsh 及其 workspace 依赖 |
 
-**安装决策：**
-- 第一版用 Termux，因为 App 可以**自动引导安装**（下载 Termux + 运行 `pkg install`），体验接近 Operit 的一体化安装。
-- dsh 本体是纯 JS/ESM，无强制原生模块，Termux 上 Node 兼容性风险集中在个别依赖；阶段 0 已验证此风险点。
+**为什么用 chroot Ubuntu 24 而不是 Termux：**
+- Operit 用 chroot 跑完整 Ubuntu 24（约 380MB 安装包），用户希望与 Operit 同款体验（手机变真 Linux 工作站）。
+- chroot 提供完整文件系统（`/bin /usr /etc /var`）、`apt`、系统级工具链，比 Termux 的包管理更接近真电脑。
+- 代价：chroot 需要 root 权限——用户已确认愿意 root（KernelSU），此条件成立。
+
+**chroot 容器部署方式（第一版建议）：**
+- App 首次启动自动执行：`su -c` 挂载容器根目录 → 解压随包部署的 Ubuntu rootfs（或脚本从 Ubuntu 官方/镜像拉取）→ 挂载 `/proc` `/dev` `/dev/pts` 等 → 进入 chroot 安装 Node.js 与 dsh。
+- 容器数据目录建议放在 `/data/local/dsh-container`（root 可访问、非易失分区）。
+- 提权仅用于**启动容器 / 备份打包**；容器常驻后，dsh 进程在容器内以普通用户运行，日常对话不需要 root。
 
 ### 7.2 安装什么工具（Linux 执行层常用工具）
 
-> 这些工具由 dsh 的 shell 能力（`tool-bash` → `dsh-bash-sandbox` → `dsh-subprocess-local`）在 Termux 环境内执行。默认组合已启用 `tool-bash`、`tool-fs`、`tool-web` 等（见 base/cordis.patch.yml）。
+> 这些工具由 dsh 的 shell 能力（`tool-bash` → `dsh-bash-sandbox` → `dsh-subprocess-local`）在 **chroot Ubuntu 24 容器内**执行。默认组合已启用 `tool-bash`、`tool-fs`、`tool-web` 等（见 base/cordis.patch.yml）。所有工具用 Ubuntu 的 `apt` 安装。
 
 | 工具 | 用途 | 安装来源 |
 |---|---|---|
-| `git` | 版本管理、拉取插件/技能 | `pkg install git` |
-| `python` | 跑 Python 脚本（dsh 有 python/ SDK） | `pkg install python` |
-| `node` / `npm` / `corepack` | 运行 dsh 本体 + MCP 服务器（stdio） | `pkg install nodejs-lts` |
-| `curl` / `wget` | 网络、下载 | `pkg install curl` |
-| `openssh` | （可选）远程排障 | `pkg install openssh` |
-| `ripgrep`(`rg`) / `fd` | 快速搜索（dsh 的 fs-search 工具可调用） | `pkg install ripgrep` |
-| `bash` / `coreutils` / `file` | shell 基础 | Termux 自带 |
+| `git` | 版本管理、拉取插件/技能 | `apt install git` |
+| `python3` | 跑 Python 脚本（dsh 有 python/ SDK） | `apt install python3` |
+| `nodejs` / `npm` | 运行 dsh 本体 + MCP 服务器（stdio） | `apt install nodejs npm`（或 nodesource 装 LTS ≥ 22） |
+| `curl` / `wget` | 网络、下载 | `apt install curl wget` |
+| `openssh-client` | （可选）远程排障 | `apt install openssh-client` |
+| `ripgrep` / `fd-find` | 快速搜索（dsh 的 fs-search 工具可调用） | `apt install ripgrep` |
+| `build-essential` | 编译原生依赖（个别 npm 包需要） | `apt install build-essential` |
+| `bash` / `coreutils` / `file` / `tar` | shell 基础、备份打包 | Ubuntu 自带 |
 
-**注意：** 不要在第一版安装 `proot`/`chroot` 根发行版——不必要；除非后续要完整 Ubuntu 或跑 GUI 应用。
+**注意：** Ubuntu rootfs 默认用户空间较精简，首次部署后先跑 `apt update && apt upgrade`，再装上述工具；不要安装完整桌面环境（非必需，浪费空间）。
 
 ### 7.3 技能（skill）方案
 
@@ -223,6 +250,38 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 - 添加/删除：填 serverName + transport +（stdio: command/args/env/cwd）或（http: url/headers）
 - 展示模型可见工具名 `mcp__<serverName>__<tool>`，方便用户理解
 
+### 7.6 安全与隔离方案（root + chroot 场景）
+
+> root 权限很大，chroot 提供了一层边界但不是安全沙箱。本项目采用"隔离为主 + 最小提权 + 备份兜底"三层策略。
+
+| 层次 | 措施 |
+|---|---|
+| 容器隔离 | AI（dsh 及其 shell 工具）只能在 **chroot Ubuntu 容器内**读写/执行；容器是独立文件系统，天然隔离手机本体 |
+| 只读挂载 | 手机本体的 `/sdcard/Download` 以**只读**方式挂载进容器，是**唯一**可访问的手机目录；DCIM/Documents/系统分区等均不可见 |
+| 最小提权 | `su` 仅在**启动容器 / 备份打包 / 首次部署**时使用；日常对话时 dsh 在容器内以普通用户（非 root）运行 |
+| 端口封闭 | dsh Web 服务只绑定 `127.0.0.1:3080`，不对外网/局域网开放 |
+| 凭据保管 | DeepSeek API Key 走 dsh 的 credentials 机制（`$DSH_HOME/.credentials.yaml`），不写入代码与日志 |
+| 备份兜底 | 容器 + 配置 + 会话日志可一键打包恢复（见 7.7），即使容器损坏也能回到最近状态 |
+
+**明确不做的安全边界（与用户确认一致）：**
+- 不做无障碍点击操控其它 App（避免把 root + 自动化叠加到系统 UI）。
+- 不授予 AI 对手机本体的写权限；图库/文档目录默认不可访问（后续如需，再走临时授权）。
+
+### 7.7 备份 / 恢复方案（第一版纳入）
+
+**备份内容（一个归档包）：**
+1. chroot Ubuntu 容器（`/data/local/dsh-container`）
+2. dsh 配置（`$DSH_HOME`：settings、credentials、presets）
+3. 会话日志与技能（`$DSH_HOME/sessions`、`skills`）
+
+**备份方式：**
+- App 内"一键备份"：`su -c` 停止容器 → `tar czf` 打包上述目录 → 存到 `/sdcard/Download/dsh-backup-<日期>.tar.gz`（方便用户拷贝走或换机）。
+- 恢复流程：新手机装 App → 选择备份文件 → `su -c` 解包到原路径 → 重启容器 → 会话与配置原样恢复。
+
+**触发与提醒：**
+- 手动一键备份（主界面入口）+ 建议"升级/更换容器前先备份"提示。
+- 不做自动定时备份（第一版）；后续可加"每周自动备份到 Download"。
+
 ---
 
 ## 8. 实施步骤（分阶段任务）
@@ -231,20 +290,22 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 
 ### 阶段 0：环境准备
 - [ ] 沙箱安装 Android SDK + 构建工具（约 20-30 分钟，Java 22 + Gradle 8.14 已具备）
-- [ ] 用 Termux 在真机/模拟器验证：`pkg install nodejs-lts` 后能跑通 dsh 最小例子（作为可行性验证）
+- [ ] 在已 root（KernelSU）的真机上验证 chroot 方案可行性：`su -c` 进入 Ubuntu 24 rootfs，安装 Node ≥ 22 并跑通 dsh 最小例子（作为可行性验证）
 
 ### 阶段 1：最小骨架
 - [ ] 新建 Android 工程（Kotlin + Compose），实现"WebView 加载 dsh Web UI"的最小壳
-- [ ] 实现"首次安装向导"：检查/引导安装 Linux 运行时 + Node.js + dsh 核心（自动化脚本）
-- [ ] 实现服务守护：启动 dsh（`dsh web` 或等价入口）、健康检查、停止、日志查看
+- [ ] 实现"首次安装向导"：`su -c` 部署 chroot Ubuntu 24 rootfs + Node.js + dsh 核心（自动化脚本）
+- [ ] 实现服务守护：`su -c` 启动 chroot 容器 + dsh（`dsh web`）、健康检查、停止、日志查看
 
 ### 阶段 2：功能落地
 - [ ] 设置页（API Key / 模型 / 工作目录）写入 dsh 配置（cordis.yml 覆盖）
+- [ ] 实现隔离边界：只读挂载 `/sdcard/Download`，验证其它手机目录不可访问
+- [ ] 实现一键备份/恢复（打包容器+配置+会话日志，可跨机恢复）
 - [ ] 验证：对话、工具调用、Shell 命令、skill/MCP 加载在 App 内全部可用
 - [ ] 崩溃/重启恢复：服务异常自动拉起，会话日志不丢
 
 ### 阶段 3：验收与收尾
-- [ ] 在普通手机真机验证全流程
+- [ ] 在已 root 真机验证全流程（含重启手机后容器自动拉起）
 - [ ] 打包自用 APK（自签名即可，无需上商店）
 - [ ] 补充使用文档（面向非开发者：安装→填 Key→使用）
 
@@ -252,10 +313,12 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 
 ## 9. 验证方式（如何证明"能在手机上用"）
 
-1. **可行性验证（阶段 0）**：Termux 中能成功启动 dsh 并完成一次对话 → 证明"手机本地跑 dsh"成立。
-2. **功能验收（阶段 2）**：App 内完成一个端到端任务——例如"在手机内新建一个文件夹，写一个脚本并运行，输出结果到对话里"。
-3. **稳定性**：App 杀掉重开后，会话历史仍在（依赖 dsh session 持久化）。
-4. **安全**：端口仅 localhost 监听，`netstat` 验证无外部监听。
+1. **可行性验证（阶段 0）**：在已 root（KernelSU）真机上，`su -c` 进入 chroot Ubuntu 24，能启动 dsh 并完成一次对话 → 证明"手机本地跑 dsh + chroot 容器"成立。
+2. **隔离验证（阶段 2）**：容器内确认 `/sdcard/Download` 可读、其它手机目录（如 DCIM、Documents）不可访问、不可写手机本体。
+3. **功能验收（阶段 2）**：App 内完成一个端到端任务——例如"在容器内新建一个文件夹，写一个脚本并运行，输出结果到对话里"。
+4. **稳定性**：App 杀掉重开后，会话历史仍在（依赖 dsh session 持久化）。
+5. **备份恢复**：一键备份 → 清空容器 → 一键恢复 → 会话与配置原样还原。
+6. **安全**：端口仅 localhost 监听（`netstat` 验证）；`su` 提权仅在启动/备份时发生（日志可查）。
 
 ---
 
@@ -264,7 +327,8 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 | 风险 | 等级 | 对策 |
 |---|---|---|
 | 普通手机性能不足以支撑 Node + dsh 长跑 | 中 | 最小可用版只跑轻量任务；本地模型不纳入第一版；建议用闲置机跑 |
-| Termux 上 Node.js/原生模块兼容问题 | 中 | 阶段 0 先做可行性验证，卡住则换 proot 发行版 |
+| chroot + KernelSU 环境兼容问题（rootfs 拉取、su 提权） | 中 | 阶段 0 先做真机可行性验证；卡住则回退 proot（免 root 但更重） |
+| root 误操作风险（容器边界被突破） | 中 | 隔离 + 只读挂载 + 最小提权 + 一键备份兜底（见 7.6/7.7） |
 | WebView 与 dsh Web UI 交互（剪贴板/文件选择） | 低 | 用 WebView JavaScriptBridge 补齐原生能力桥 |
 | 云端 API 依赖网络 | 低 | 明确告知离线不可用；后续可加本地模型路线 |
 | 沙箱无 Android SDK | 中 | 已确认可安装；如需实际打包，先执行阶段 0 |
@@ -277,6 +341,7 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 - **不做**手机本地大模型推理（第一版；用户选云端 API，且普通手机跑不动大模型）。
 - **不重写**对话界面（复用 dsh Web UI）。
 - **不改** dsh 核心循环（遵守仓库约定：插件优先，不轻易动 agent-loop）。
+- **不放开** AI 对手机本体的写权限（仅只读 `/sdcard/Download`，用户已确认隔离边界）。
 
 ---
 
@@ -284,4 +349,5 @@ dsh 原生支持 MCP 客户端桥接：`@deepseek-ai/dsh-mcp-client`（见 `pack
 
 - [ ] 用户确认本方案文档后，再决定是否进入"阶段 0 可行性验证"或直接开始搭建 App 工程。
 - [ ] 确定 App 名称与包名（自用即可，如 `com.self.dshmobile`）。
+- [ ] 确定 chroot Ubuntu 24 rootfs 的获取方式（随 App 打包 vs 首启脚本拉取），需评估体积与首启耗时。
 - [ ] 若后续要做跨会话记忆，需按 dsh 的"模型可见⟺已记录"原则设计新的 session 事件（届时参考 `.agents/notes` 与 session 文档）。
