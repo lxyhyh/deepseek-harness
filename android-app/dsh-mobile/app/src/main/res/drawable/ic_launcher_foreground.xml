@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- dsh Mobile 图标前景：终端 + 手机轮廓组合 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- 手机轮廓 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,28h32c2.2,0 4,1.8 4,4v44c0,2.2 -1.8,4 -4,4h-32c-2.2,0 -4,-1.8 -4,-4v-44c0,-2.2 1.8,-4 4,-4zM41,38h26v24h-26zM46,62h16v2h-16z" />
+    <!-- 终端提示符 $ 和光标 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M46,46l6,4l-6,4" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,54h6" />
+</vector>
