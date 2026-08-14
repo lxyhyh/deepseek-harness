@@ -45,8 +45,9 @@ android {
         buildConfig = true
     }
     // 内置容器归档已是 gzip，禁止再 deflate 一次（避免大文件二次压缩的内存/CPU 峰值）
+    // 分片后缀 .00/.01/.02/.03 也按扩展名逐个禁止压缩
     androidResources {
-        noCompress += "gz"
+        noCompress += listOf("gz", ".00", ".01", ".02", ".03")
     }
 }
 
