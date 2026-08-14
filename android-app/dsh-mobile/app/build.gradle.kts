@@ -20,6 +20,8 @@ android {
         buildConfigField("int", "DSH_WEB_PORT", "3080")
         // 容器数据目录（root 可访问、非易失分区，见方案 7.1）
         buildConfigField("String", "CONTAINER_ROOT", "\"/data/local/dsh-container\"")
+        // 内置容器归档（APK assets 内嵌，首次部署解压，无需下载）
+        buildConfigField("String", "CONTAINER_ASSET", "\"dsh-container-arm64.tar.gz\"")
     }
 
     buildTypes {
@@ -41,6 +43,10 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+    // 内置容器归档已是 gzip，禁止再 deflate 一次（避免大文件二次压缩的内存/CPU 峰值）
+    androidResources {
+        noCompress += "gz"
     }
 }
 

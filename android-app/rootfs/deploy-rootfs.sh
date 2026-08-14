@@ -1,130 +1,106 @@
 #!/usr/bin/env bash
 # =============================================================================
-# deploy-rootfs.sh —— 构建 dsh Mobile 的 Ubuntu 24.04 arm64 rootfs
+# deploy-rootfs.sh —— 构建 dsh Mobile 内置容器归档
 # =============================================================================
 # 说明：
-#   dsh Mobile 在手机上通过 chroot 运行完整 Ubuntu，本脚本在 **arm64 Linux 环境**
-#   （已 root 的安卓手机终端 / arm64 开发机 / CI arm64 runner）执行，产出可供
-#   APK「首次部署」使用的 rootfs 目录或归档。
-#
-#   为什么不在 x86 沙箱里做：arm64 包的安装（dpkg）需要在 arm64 内核上运行
-#   （qemu-user 跨架构 chroot 不可靠且 dsh 启动无法验证），因此本脚本设计为
-#   在 arm64 真机环境执行；沙箱内的 x86_64 构建仅用于验证 dsh 产物（纯 JS，
-#   架构无关）可被 Node 加载。
+#   dsh Mobile 在手机上通过 chroot 运行完整 Ubuntu，本脚本在 **x86-64 沙箱/CI**
+#   中执行，通过下载 Ubuntu 官方 arm64 cloud-image rootfs 和 Node.js arm64 二进制，
+#   拼装成可嵌入 APK assets 的 tar.gz 归档（无需 arm64 环境）。
 #
 # 用法：
-#   ./deploy-rootfs.sh [目标目录]        # 默认 /data/local/dsh-container
-#   环境变量：
-#     MIRROR          apt 源         默认 http://ports.ubuntu.com/ubuntu-ports
-#     NODE_MAJOR      Node 大版本    默认 22（arm64 官方支持）
-#     DSH_SOURCE      dsh 来源       "npm:@deepseek-ai/dsh" 或本地构建产物目录
-#     DSH_BUNDLE      预构建 dsh 包  绝对路径（推荐：x86 沙箱 pnpm deploy 产物，纯 JS）
-#     PACK_OUT        tar 输出路径    如 /data/local/dsh-container.tar.gz
+#   ./deploy-rootfs.sh                    # 从镜像下载 arm64 rootfs + Node.js + dsh
+#   ./deploy-rootfs.sh --only-dsh <路径>  # 仅更新 dsh 产物（已有 rootfs 时）
+#
+# 环境变量：
+#   ROOTFS_MIRROR   Ubuntu 镜像     默认 https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cloud-images/
+#   NODE_MIRROR     Node.js 镜像    默认 https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/
+#   NODE_VERSION    Node 版本号     默认 v22.14.0
+#   OUTPUT          归档输出路径    默认 ./dsh-container-arm64.tar.gz
+#   WORK_DIR        工作目录        默认 ./rootfs-build
 # =============================================================================
 set -euo pipefail
 
-ROOTFS_DIR="${1:-/data/local/dsh-container}"
-MIRROR="${MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
-NODE_MAJOR="${NODE_MAJOR:-22}"
-RELEASE=noble          # Ubuntu 24.04
+ROOTFS_MIRROR="${ROOTFS_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cloud-images/}"
+NODE_MIRROR="${NODE_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/}"
+NODE_VERSION="${NODE_VERSION:-v22.14.0}"
+OUTPUT="${OUTPUT:-$(dirname "$0")/dsh-container-arm64.tar.gz}"
+WORK_DIR="${WORK_DIR:-$(dirname "$0")/rootfs-build}"
+RELEASE=noble  # Ubuntu 24.04
 ARCH=arm64
-PACK_OUT="${PACK_OUT:-}"
 
 log() { echo "[dsh-rootfs] $*"; }
 die() { echo "[dsh-rootfs] 错误: $*" >&2; exit 1; }
 
-[ "$(uname -m)" = "aarch64" ] || die "本脚本需在 arm64 环境执行（当前 $(uname -m)）。x86 沙箱仅用于构建 dsh 纯 JS 产物。"
+mkdir -p "$WORK_DIR" && cd "$WORK_DIR"
 
-# 0) 前置检查
-command -v debootstrap >/dev/null 2>&1 || die "缺少 debootstrap，请先: apt-get install -y debootstrap"
-command -v chroot >/dev/null 2>&1 || die "缺少 chroot"
+# 1) 下载 arm64 rootfs（Ubuntu cloud-image）
+ROOTFS_TAR="$WORK_DIR/rootfs.tar.xz"
+ROOTFS_DIR="$WORK_DIR/rootfs"
+if [ ! -f "$ROOTFS_TAR" ]; then
+  log "1/6: 下载 Ubuntu $RELEASE arm64 cloud-image rootfs"
+  local_url="${ROOTFS_MIRROR}${RELEASE}/current/${RELEASE}-server-cloudimg-${ARCH}-root.tar.xz"
+  curl -fSL -o "$ROOTFS_TAR" "$local_url" || \
+    die "下载失败，请检查镜像地址: $local_url"
+fi
 
-# 1) debootstrap 基础系统（noble / arm64）
 if [ ! -d "$ROOTFS_DIR/bin" ]; then
-  log "阶段 1/6: debootstrap $RELEASE arm64 → $ROOTFS_DIR"
-  debootstrap --arch="$ARCH" --variant=minbase "$RELEASE" "$ROOTFS_DIR" "$MIRROR"
-else
-  log "阶段 1/6: 检测到已有 rootfs，跳过 debootstrap"
+  log "2/6: 解压 rootfs"
+  mkdir -p "$ROOTFS_DIR"
+  tar -xJf "$ROOTFS_TAR" -C "$ROOTFS_DIR"
 fi
 
-# 2) chroot 基础配置
-log "阶段 2/6: 基础配置（网络/apt/时区）"
-cp /etc/resolv.conf "$ROOTFS_DIR/etc/resolv.conf" 2>/dev/null || true
-cat > "$ROOTFS_DIR/etc/apt/sources.list.d/ubuntu.sources" <<EOF
-Types: deb
-URIs: $MIRROR
-Suites: $RELEASE $RELEASE-updates $RELEASE-security
-Components: main universe
-Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
-EOF
-
-# 3) 基础工具
-log "阶段 3/6: 安装基础工具（git/curl/build-essential/…）"
-chroot "$ROOTFS_DIR" /bin/bash -c '
-  export DEBIAN_FRONTEND=noninteractive
-  apt-get update -y
-  apt-get install -y --no-install-recommends \
-    ca-certificates curl wget git unzip xz-utils \
-    build-essential pkg-config python3 \
-    openssh-client locales \
-  || apt-get install -y --no-install-recommends curl wget git ca-certificates
-  locale-gen en_US.UTF-8 || true
-'
-
-# 4) Node.js（arm64 官方发行）
-log "阶段 4/6: 安装 Node.js LTS ${NODE_MAJOR}（arm64）"
-chroot "$ROOTFS_DIR" /bin/bash -c '
-  set -e
-  export DEBIAN_FRONTEND=noninteractive
-  curl -fsSL "https://deb.nodesource.com/setup_'"$NODE_MAJOR"'.x" -o /tmp/nodesource.sh \
-    && bash /tmp/nodesource.sh || {
-      # 兜底：官方 tar 包直接解压到 /opt/node
-      echo "nodesource 不可用，改用官方二进制";
-    }
-  apt-get install -y nodejs
-  node -v && npm -v
-'
-
-# 5) dsh（纯 JS，架构无关）
-log "阶段 5/6: 安装 dsh"
-if [ -n "${DSH_BUNDLE:-}" ] && [ -d "$DSH_BUNDLE" ]; then
-  log "  从本地产物 $DSH_BUNDLE 复制（x86 沙箱 pnpm deploy 构建，纯 JS 可跨架构运行）"
-  mkdir -p "$ROOTFS_DIR/opt/dsh"
-  cp -r "$DSH_BUNDLE"/. "$ROOTFS_DIR/opt/dsh/"
-  chroot "$ROOTFS_DIR" /bin/bash -c 'cd /opt/dsh && (command -v npm >/dev/null && npm install --omit=dev --no-audit --no-fund || true)'
-elif [ -n "${DSH_SOURCE:-}" ]; then
-  log "  从 $DSH_SOURCE 安装"
-  chroot "$ROOTFS_DIR" /bin/bash -c 'npm install -g "'"$DSH_SOURCE"'"
-'
-else
-  log "  ⚠ 未指定 DSH_SOURCE / DSH_BUNDLE，跳过 dsh 安装（后续可手动补装）"
+# 2) 安装 Node.js arm64
+if [ ! -d "$ROOTFS_DIR/opt/node/bin" ]; then
+  log "3/6: 下载 Node.js $NODE_VERSION arm64"
+  node_url="${NODE_MIRROR}${NODE_VERSION}/node-${NODE_VERSION}-linux-${ARCH}.tar.xz"
+  curl -fSL -o node.tar.xz "$node_url" || \
+    die "下载失败: $node_url"
+  tar -xJf node.tar.xz -C "$ROOTFS_DIR/opt/"
+  mv "$ROOTFS_DIR/opt/node-${NODE_VERSION}-linux-${ARCH}" "$ROOTFS_DIR/opt/node"
 fi
 
-# 6) 环境变量 + 启动脚本
-log "阶段 6/6: 写入环境变量与容器启动脚本"
-cat > "$ROOTFS_DIR/etc/profile.d/dsh-android.sh" <<'EOF'
-# dsh Mobile 编译环境（与 App「环境变量」页默认值一致，见方案 7.2.4）
-export JAVA_HOME="${JAVA_HOME:-/opt/jdk-17}"
-export ANDROID_HOME="${ANDROID_HOME:-/opt/android-sdk}"
-export ANDROID_SDK_ROOT="$ANDROID_HOME"
-export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_HOME/ndk/27.0.12077973}"
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
-EOF
+# 3) 安装 dsh
+log "4/6: 部署 dsh"
+DSH_DIR="$ROOTFS_DIR/opt/dsh"
+if [ ! -d "$DSH_DIR/node_modules" ]; then
+  # 从 dsh 项目根 pnpm deploy 构建纯 JS 产物
+  if [ -n "${DSH_BUILD_DIR:-}" ]; then
+    log "  从 $DSH_BUILD_DIR 复制"
+    cp -r "$DSH_BUILD_DIR"/. "$DSH_DIR/"
+  else
+    log "  ⚠ 未设置 DSH_BUILD_DIR，跳过 dsh 部署"
+  fi
+fi
 
-# 容器启动脚本（dsh web 守护）
-cat > "$ROOTFS_DIR/opt/dsh/start-dsh.sh" <<'EOF'
+# 3b) 替换 arm64 原生模块（swap-arm64.sh）
+log "5/6: 替换 arm64 原生模块"
+if [ -f "$(dirname "$0")/swap-arm64.sh" ]; then
+  bash "$(dirname "$0")/swap-arm64.sh" "$DSH_DIR"
+fi
+
+# 4) 启动脚本
+log "写入启动脚本"
+cat > "$ROOTFS_DIR/opt/dsh/start-dsh.sh" <<'SCRIPT'
 #!/bin/bash
 # 启动 dsh Web 服务（由 Android App 在 chroot 内调用）
 set -e
-export PATH="/opt/node/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export PATH="/opt/node/bin:/opt/dsh/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
+export HOME=/root
+mkdir -p /root/workspace
 cd /root/workspace
-exec /opt/dsh/bin/dsh web --host 127.0.0.1 --port 3080
-EOF
-chmod +x "$ROOTFS_DIR/opt/dsh/start-dsh.sh" 2>/dev/null || true
+exec dsh web --host 127.0.0.1 --port 3080
+SCRIPT
+chmod +x "$ROOTFS_DIR/opt/dsh/start-dsh.sh"
 
-log "完成：rootfs 已就绪 → $ROOTFS_DIR"
-if [ -n "$PACK_OUT" ]; then
-  log "打包中 → $PACK_OUT"
-  tar czf "$PACK_OUT" -C / "$(echo "$ROOTFS_DIR" | sed 's|^/||')"
-  log "归档完成：$(ls -lh "$PACK_OUT" | awk '{print $5}')"
-fi
+# 5) 启动入口脚本
+cat > "$ROOTFS_DIR/opt/dsh/bin/dsh" <<'SCRIPT'
+#!/bin/sh
+exec /opt/node/bin/node /opt/dsh/lib/bin.js "$@"
+SCRIPT
+chmod +x "$ROOTFS_DIR/opt/dsh/bin/dsh"
+
+# 6) 打包
+log "6/6: 打包归档 → $OUTPUT"
+cd "$ROOTFS_DIR"
+tar czf "$OUTPUT" .
+log "完成：$(ls -lh "$OUTPUT" | awk '{print $5}')"

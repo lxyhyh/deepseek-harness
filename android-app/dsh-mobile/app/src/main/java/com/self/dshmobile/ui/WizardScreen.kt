@@ -25,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -39,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.self.dshmobile.data.ContainerManager
@@ -56,11 +58,15 @@ fun WizardScreen(
     onSkipToChat: () -> Unit,
     scope: CoroutineScope,
 ) {
+    val context = LocalContext.current
     var step by remember { mutableIntStateOf(0) }
     // 环境检查结果：null=未检测，true=通过，false=不通过
     var rootOk by remember { mutableStateOf<Boolean?>(null) }
     var deployedOk by remember { mutableStateOf<Boolean?>(null) }
     var checking by remember { mutableStateOf(false) }
+    // 内置容器部署进度：-1=空闲，0..100=部署中
+    var deployProgress by remember { mutableIntStateOf(-1) }
+    var deployError by remember { mutableStateOf<String?>(null) }
 
     when (step) {
         0 -> WelcomeStep(
@@ -71,6 +77,8 @@ fun WizardScreen(
             rootOk = rootOk,
             deployedOk = deployedOk,
             checking = checking,
+            deployProgress = deployProgress,
+            deployError = deployError,
             onCheck = {
                 checking = true
                 scope.launch {
@@ -78,6 +86,21 @@ fun WizardScreen(
                     deployedOk = ContainerManager.isContainerDeployed()
                     checking = false
                 }
+            },
+            onDeploy = {
+                deployError = null
+                ContainerManager.deployFromAssets(
+                    context = context,
+                    onProgress = { p -> deployProgress = p },
+                    onDone = { r ->
+                        when (r) {
+                            is SuResult.Ok -> deployedOk = true
+                            is SuResult.Fail -> deployError = r.message
+                            SuResult.NoRoot -> deployError = "需要 root（KernelSU/Magisk）才能部署容器"
+                        }
+                        deployProgress = -1
+                    },
+                )
             },
             onNext = { step = 2 },
             onBack = { step = 0 },
@@ -169,8 +192,8 @@ private fun WelcomeStep(onNext: () -> Unit, onSkip: () -> Unit) {
         )
         InfoCard(
             icon = Icons.Filled.CheckCircle,
-            title = "部署一个 Ubuntu 环境",
-            body = "首次使用会下载并部署 Ubuntu 24.04（arm64）容器，预装 Node.js 与 dsh，约占用 1–2 GB 空间。",
+            title = "内置 Ubuntu 环境",
+            body = "Ubuntu 24.04（arm64）容器已随 App 内置，预装 Node.js 与 dsh，首次解压即用、无需下载，约占用 1–2 GB 空间。",
         )
         Button(onClick = onNext, modifier = Modifier.fillMaxWidth()) {
             Text("开始部署")
@@ -186,7 +209,10 @@ private fun EnvironmentStep(
     rootOk: Boolean?,
     deployedOk: Boolean?,
     checking: Boolean,
+    deployProgress: Int,
+    deployError: String?,
     onCheck: () -> Unit,
+    onDeploy: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -221,9 +247,40 @@ private fun EnvironmentStep(
             CheckRow(label = "Root 权限", ok = rootOk, detail = if (rootOk == true) "已获得 su 权限" else "未检测到 su（KernelSU/Magisk）")
             CheckRow(label = "容器 rootfs", ok = deployedOk, detail = when (deployedOk) {
                 true -> "已部署（可在 设置 中重启容器）"
-                false -> "尚未部署，点击下一步后在手机上下载部署"
+                false -> "尚未部署"
                 null -> "未知"
             })
+
+            // 有 root 但未部署：一键解压内置容器（无需下载）
+            if (rootOk == true && deployedOk == false) {
+                if (deployProgress < 0) {
+                    Button(onClick = onDeploy, modifier = Modifier.fillMaxWidth()) {
+                        Text("开始部署（内置 Ubuntu 容器）")
+                    }
+                } else {
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("正在解压内置容器… $deployProgress%", style = MaterialTheme.typography.bodyMedium)
+                            LinearProgressIndicator(
+                                progress = { deployProgress / 100f },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
+                }
+                if (deployError != null) {
+                    InfoCard(
+                        icon = Icons.Filled.ErrorOutline,
+                        title = "部署失败",
+                        body = deployError!!,
+                    )
+                }
+                InfoCard(
+                    icon = Icons.Filled.CheckCircle,
+                    title = "无需联网下载",
+                    body = "Ubuntu 24.04（arm64）+ Node.js + dsh 已随 App 内置，解压即可用，约占用 1.5 GB 空间。",
+                )
+            }
 
             val allOk = rootOk == true && deployedOk == true
             if (!allOk) {
